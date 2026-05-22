@@ -57,9 +57,9 @@ const config: Config = {
         crisp: "-0.01em",
       },
       maxWidth: {
-        shell: "780px",
-        prose: "680px",
-        wide: "1024px",
+        shell: "980px",
+        prose: "760px",
+        wide: "1160px",
       },
       spacing: {
         section: "4rem",

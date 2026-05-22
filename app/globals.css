@@ -13,6 +13,8 @@
    =========================================================================== */
 
 :root {
+  --font-newsreader: Georgia;
+  --font-plex-mono: "SFMono-Regular";
   --lemma-cream: #f5f0e6;
   --lemma-paper: #ede6d6;
   --lemma-ink: #1a1a1a;

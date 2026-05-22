@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.env.local
+.env.production.local
+.env.development.local
+.DS_Store
+*.tsbuildinfo
+.vercel
+.playwright-cli/
+*.zip
+LEMMA_NOTES.md

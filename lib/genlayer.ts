@@ -1,0 +1,646 @@
+/**
+ * GenLayer client wrapper.
+ *
+ * Centralises every call to the genlayer-js SDK so the rest of the
+ * frontend never imports it directly. Two surfaces:
+ *
+ *   1. Read clients (no signing): used by server components and by
+ *      client components for view methods.
+ *   2. Write clients (browser only, MetaMask-driven): created on
+ *      demand from a connected EOA address.
+ *
+ * The contract address is read from NEXT_PUBLIC_LEMMA_CONTRACT. If it
+ * is missing, all entry points throw ContractNotDeployedError which
+ * the UI catches and renders as an editorial "court not in session"
+ * message.
+ */
+
+import { createClient, createAccount } from "genlayer-js";
+import { testnetBradbury, studionet, localnet } from "genlayer-js/chains";
+import { TransactionHashVariant, TransactionStatus } from "genlayer-js/types";
+import type { Hash } from "viem";
+import type {
+  Verdict,
+  LemmaStats,
+  VerdictSettlementStatus,
+} from "./abi";
+import { LEMMA_METHODS } from "./abi";
+
+// ---------------------------------------------------------------------------
+// Chain selection
+// ---------------------------------------------------------------------------
+
+function resolveChain() {
+  const target = (process.env.NEXT_PUBLIC_GENLAYER_CHAIN ?? "bradbury").toLowerCase();
+  if (target === "studio" || target === "studionet") return studionet;
+  if (target === "local" || target === "localnet") return localnet;
+  return testnetBradbury;
+}
+
+const chain = resolveChain();
+
+interface ReadOptions {
+  transactionHashVariant?: TransactionHashVariant;
+}
+
+const DEFAULT_READ_OPTIONS: ReadOptions = {
+  transactionHashVariant: TransactionHashVariant.LATEST_NONFINAL,
+};
+
+const STATUS_CODE_TO_NAME: Record<number, TransactionStatus> = {
+  0: TransactionStatus.UNINITIALIZED,
+  1: TransactionStatus.PENDING,
+  2: TransactionStatus.PROPOSING,
+  3: TransactionStatus.COMMITTING,
+  4: TransactionStatus.REVEALING,
+  5: TransactionStatus.ACCEPTED,
+  6: TransactionStatus.UNDETERMINED,
+  7: TransactionStatus.FINALIZED,
+  8: TransactionStatus.CANCELED,
+  9: TransactionStatus.APPEAL_REVEALING,
+  10: TransactionStatus.APPEAL_COMMITTING,
+  11: TransactionStatus.READY_TO_FINALIZE,
+  12: TransactionStatus.VALIDATORS_TIMEOUT,
+  13: TransactionStatus.LEADER_TIMEOUT,
+};
+
+const TERMINAL_FAILURE_STATUSES = new Set<TransactionStatus>([
+  TransactionStatus.CANCELED,
+  TransactionStatus.UNDETERMINED,
+  TransactionStatus.VALIDATORS_TIMEOUT,
+  TransactionStatus.LEADER_TIMEOUT,
+]);
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+export class ContractNotDeployedError extends Error {
+  constructor() {
+    super("Lemma contract address not configured.");
+    this.name = "ContractNotDeployedError";
+  }
+}
+
+export class WalletNotConnectedError extends Error {
+  constructor() {
+    super("A wallet must be connected to perform this action.");
+    this.name = "WalletNotConnectedError";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Contract address
+// ---------------------------------------------------------------------------
+
+type Address0x = `0x${string}`;
+
+export function getContractAddress(): Address0x {
+  const raw = process.env.NEXT_PUBLIC_LEMMA_CONTRACT;
+  if (!raw || !raw.startsWith("0x")) {
+    throw new ContractNotDeployedError();
+  }
+  return raw as Address0x;
+}
+
+export function isContractConfigured(): boolean {
+  const raw = process.env.NEXT_PUBLIC_LEMMA_CONTRACT;
+  return Boolean(raw && raw.startsWith("0x"));
+}
+
+// ---------------------------------------------------------------------------
+// Read client (no signer)
+// ---------------------------------------------------------------------------
+
+function readClient() {
+  const ephemeral = createAccount();
+  return createClient({
+    chain,
+    account: ephemeral,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Read methods
+// ---------------------------------------------------------------------------
+
+export async function fetchStats(
+  options: ReadOptions = DEFAULT_READ_OPTIONS,
+): Promise<LemmaStats> {
+  const client = readClient();
+  const address = getContractAddress();
+  const result = await client.readContract({
+    address,
+    functionName: LEMMA_METHODS.getStats,
+    args: [],
+    transactionHashVariant: options.transactionHashVariant,
+  });
+  return normaliseStats(result as unknown as Record<string, unknown>);
+}
+
+export async function fetchRecentClaimHashes(
+  limit = 20,
+  options: ReadOptions = DEFAULT_READ_OPTIONS,
+): Promise<string[]> {
+  const client = readClient();
+  const address = getContractAddress();
+  const result = await client.readContract({
+    address,
+    functionName: LEMMA_METHODS.getRecentClaims,
+    args: [limit],
+    transactionHashVariant: options.transactionHashVariant,
+  });
+  return Array.isArray(result) ? (result as string[]) : [];
+}
+
+export async function fetchVerdict(
+  claimHash: string,
+  options: ReadOptions = DEFAULT_READ_OPTIONS,
+): Promise<Verdict | null> {
+  if (!claimHash || !claimHash.startsWith("0x")) return null;
+  const client = readClient();
+  const address = getContractAddress();
+  try {
+    const result = await client.readContract({
+      address,
+      functionName: LEMMA_METHODS.getVerdict,
+      args: [claimHash],
+      transactionHashVariant: options.transactionHashVariant,
+    });
+    return normaliseVerdict(result as unknown as Record<string, unknown>);
+  } catch {
+    // The contract reverts with UserError for unknown claim_hash. The
+    // SDK surfaces this as a thrown call exception; callers expect null.
+    return null;
+  }
+}
+
+export async function fetchRecentVerdicts(limit = 20): Promise<Verdict[]> {
+  const [acceptedHashes, finalizedHashes] = await Promise.all([
+    fetchRecentClaimHashes(limit, {
+      transactionHashVariant: TransactionHashVariant.LATEST_NONFINAL,
+    }),
+    fetchRecentClaimHashes(limit, {
+      transactionHashVariant: TransactionHashVariant.LATEST_FINAL,
+    }),
+  ]);
+  const finalizedSet = new Set(finalizedHashes);
+  const results = await Promise.all(
+    acceptedHashes.map(async (hash) => {
+      const verdict = await fetchVerdict(hash, {
+        transactionHashVariant: TransactionHashVariant.LATEST_NONFINAL,
+      });
+      if (!verdict) return null;
+      return {
+        ...verdict,
+        settlement_status: finalizedSet.has(hash) ? "finalized" : "accepted",
+      } satisfies Verdict;
+    }),
+  );
+  const verdicts: Verdict[] = [];
+  for (const verdict of results) {
+    if (verdict) verdicts.push(verdict);
+  }
+  return verdicts;
+}
+
+export async function fetchVerdictRecord(claimHash: string): Promise<Verdict | null> {
+  const [acceptedVerdict, finalizedVerdict] = await Promise.all([
+    fetchVerdict(claimHash, {
+      transactionHashVariant: TransactionHashVariant.LATEST_NONFINAL,
+    }),
+    fetchVerdict(claimHash, {
+      transactionHashVariant: TransactionHashVariant.LATEST_FINAL,
+    }),
+  ]);
+
+  if (!acceptedVerdict) return null;
+
+  return {
+    ...acceptedVerdict,
+    settlement_status: finalizedVerdict ? "finalized" : "accepted",
+  };
+}
+
+export async function fetchStatsSnapshot(): Promise<{
+  accepted: LemmaStats;
+  finalized: LemmaStats;
+}> {
+  const [accepted, finalized] = await Promise.all([
+    fetchStats({
+      transactionHashVariant: TransactionHashVariant.LATEST_NONFINAL,
+    }),
+    fetchStats({
+      transactionHashVariant: TransactionHashVariant.LATEST_FINAL,
+    }),
+  ]);
+  return { accepted, finalized };
+}
+
+// ---------------------------------------------------------------------------
+// Write methods
+// ---------------------------------------------------------------------------
+
+function writeClient(account: Address0x) {
+  if (!account) throw new WalletNotConnectedError();
+  return createClient({
+    chain,
+    // MetaMask-driven signing: passing the address tells the SDK to
+    // delegate eth_sendTransaction to window.ethereum.
+    account,
+  });
+}
+
+export interface SubmitClaimInput {
+  account: Address0x;
+  claimText: string;
+  sourceUrl: string;
+  sourceContext: string;
+  stake: bigint;
+}
+
+export interface SubmitClaimResult {
+  txHash: Hash;
+  claimHash: string;
+  settlementStatus: VerdictSettlementStatus;
+  verdict: Verdict;
+}
+
+export interface TransactionLifecycleUpdate {
+  txHash: Hash;
+  lifecycle: "submitted" | "accepted" | "finalized";
+  consensusStatus: TransactionStatus | "UNKNOWN";
+  statusCode: number | null;
+}
+
+export interface WatchConsensusTransactionSnapshot<T = unknown> {
+  txHash: Hash;
+  status: TransactionStatus | "UNKNOWN";
+  statusCode: number | null;
+  accepted: boolean;
+  finalized: boolean;
+  readyToFinalize: boolean;
+  value: T | null;
+}
+
+interface WatchConsensusTransactionOptions<T> {
+  account?: Address0x;
+  intervalMs?: number;
+  timeoutMs?: number;
+  readValue?: () => Promise<T | null>;
+  isDone?: (snapshot: WatchConsensusTransactionSnapshot<T>) => boolean;
+  onUpdate?: (snapshot: WatchConsensusTransactionSnapshot<T>) => void;
+}
+
+interface SubmitClaimOptions {
+  onStatusChange?: (update: TransactionLifecycleUpdate) => void;
+}
+
+export async function submitClaim(
+  input: SubmitClaimInput,
+  options: SubmitClaimOptions = {},
+): Promise<SubmitClaimResult> {
+  const client = writeClient(input.account);
+  const address = getContractAddress();
+  const expectedClaimHash = await computeClaimHash(
+    input.claimText,
+    input.sourceUrl,
+    input.account,
+  );
+
+  const txHash = await client.writeContract({
+    address,
+    functionName: LEMMA_METHODS.submitClaim,
+    args: [input.claimText, input.sourceUrl, input.sourceContext],
+    value: input.stake,
+  });
+
+  options.onStatusChange?.({
+    txHash,
+    lifecycle: "submitted",
+    consensusStatus: TransactionStatus.PENDING,
+    statusCode: 1,
+  });
+
+  const snapshot = await watchConsensusTransaction<Verdict>(txHash, {
+    account: input.account,
+    readValue: async () => {
+      const verdict = await fetchVerdict(expectedClaimHash, {
+        transactionHashVariant: TransactionHashVariant.LATEST_NONFINAL,
+      });
+      if (!verdict) return null;
+      return {
+        ...verdict,
+        settlement_status: "accepted",
+      };
+    },
+    isDone: (state) => state.accepted && state.value !== null,
+    onUpdate: (state) => {
+      if (state.accepted) {
+        options.onStatusChange?.({
+          txHash,
+          lifecycle: state.finalized ? "finalized" : "accepted",
+          consensusStatus: state.status,
+          statusCode: state.statusCode,
+        });
+      }
+    },
+  });
+
+  if (!snapshot.value) {
+    throw new Error("Bradbury accepted the claim, but the verdict record is not readable yet.");
+  }
+
+  const settlementStatus: VerdictSettlementStatus = snapshot.finalized
+    ? "finalized"
+    : "accepted";
+
+  return {
+    txHash,
+    claimHash: expectedClaimHash,
+    settlementStatus,
+    verdict: {
+      ...snapshot.value,
+      settlement_status: settlementStatus,
+    },
+  };
+}
+
+export interface AppealInput {
+  account: Address0x;
+  claimHash: string;
+  stake: bigint;
+  previousAppealCount: number;
+}
+
+export interface AppealVerdictResult {
+  txHash: Hash;
+  settlementStatus: VerdictSettlementStatus;
+  verdict: Verdict;
+}
+
+interface AppealVerdictOptions {
+  onStatusChange?: (update: TransactionLifecycleUpdate) => void;
+}
+
+export async function appealVerdict(
+  input: AppealInput,
+  options: AppealVerdictOptions = {},
+): Promise<AppealVerdictResult> {
+  const client = writeClient(input.account);
+  const address = getContractAddress();
+  const txHash = await client.writeContract({
+    address,
+    functionName: LEMMA_METHODS.appeal,
+    args: [input.claimHash],
+    value: input.stake,
+  });
+
+  options.onStatusChange?.({
+    txHash,
+    lifecycle: "submitted",
+    consensusStatus: TransactionStatus.PENDING,
+    statusCode: 1,
+  });
+
+  const snapshot = await watchConsensusTransaction<Verdict>(txHash, {
+    account: input.account,
+    readValue: async () => {
+      const verdict = await fetchVerdict(input.claimHash, {
+        transactionHashVariant: TransactionHashVariant.LATEST_NONFINAL,
+      });
+      if (!verdict) return null;
+      return {
+        ...verdict,
+        settlement_status: "accepted",
+      };
+    },
+    isDone: (state) =>
+      state.accepted &&
+      state.value !== null &&
+      state.value.appeal_count > input.previousAppealCount,
+    onUpdate: (state) => {
+      if (state.accepted) {
+        options.onStatusChange?.({
+          txHash,
+          lifecycle: state.finalized ? "finalized" : "accepted",
+          consensusStatus: state.status,
+          statusCode: state.statusCode,
+        });
+      }
+    },
+  });
+
+  if (!snapshot.value) {
+    throw new Error("Bradbury accepted the appeal, but the updated verdict is not readable yet.");
+  }
+
+  const settlementStatus: VerdictSettlementStatus = snapshot.finalized
+    ? "finalized"
+    : "accepted";
+
+  return {
+    txHash,
+    settlementStatus,
+    verdict: {
+      ...snapshot.value,
+      settlement_status: settlementStatus,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Normalisation helpers
+// ---------------------------------------------------------------------------
+
+function normaliseVerdict(raw: Record<string, unknown>): Verdict {
+  return {
+    claim_hash: String(raw.claim_hash ?? ""),
+    claim_text: String(raw.claim_text ?? ""),
+    source_url: String(raw.source_url ?? ""),
+    source_context: String(raw.source_context ?? ""),
+    submitter: String(raw.submitter ?? ""),
+    label: (raw.label as Verdict["label"]) ?? "unverifiable",
+    justification: String(raw.justification ?? ""),
+    sequence: toNumber(raw.sequence),
+    appeal_count: toNumber(raw.appeal_count),
+    stake_consumed: toNumber(raw.stake_consumed),
+  };
+}
+
+function normaliseStats(raw: Record<string, unknown>): LemmaStats {
+  return {
+    total_claims: toNumber(raw.total_claims),
+    verified: toNumber(raw.verified),
+    partially_verified: toNumber(raw.partially_verified),
+    misrepresented: toNumber(raw.misrepresented),
+    unsupported: toNumber(raw.unsupported),
+    unverifiable: toNumber(raw.unverifiable),
+    min_stake: toNumber(raw.min_stake),
+    appeal_multiplier: toNumber(raw.appeal_multiplier),
+  };
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+export async function watchConsensusTransaction<T = unknown>(
+  txHash: Hash,
+  options: WatchConsensusTransactionOptions<T> = {},
+): Promise<WatchConsensusTransactionSnapshot<T>> {
+  const client = options.account ? writeClient(options.account) : readClient();
+  const intervalMs = options.intervalMs ?? 5000;
+  const timeoutMs = options.timeoutMs ?? 5 * 60 * 1000;
+  const deadline = Date.now() + timeoutMs;
+
+  let lastStatus: TransactionStatus | "UNKNOWN" | null = null;
+  let hasEmittedValue = false;
+  let lastSnapshot: WatchConsensusTransactionSnapshot<T> | null = null;
+
+  while (Date.now() < deadline) {
+    const statusSnapshot = await getConsensusTransactionStatus(client, txHash);
+    let value: T | null = null;
+
+    if (statusSnapshot.accepted && options.readValue) {
+      try {
+        value = await options.readValue();
+      } catch {
+        value = null;
+      }
+    }
+
+    const snapshot: WatchConsensusTransactionSnapshot<T> = {
+      ...statusSnapshot,
+      value,
+    };
+    lastSnapshot = snapshot;
+
+    const shouldEmit =
+      snapshot.status !== lastStatus || (value !== null && !hasEmittedValue);
+    if (shouldEmit) {
+      options.onUpdate?.(snapshot);
+      lastStatus = snapshot.status;
+      if (value !== null) hasEmittedValue = true;
+    }
+
+    if (
+      TERMINAL_FAILURE_STATUSES.has(snapshot.status as TransactionStatus)
+    ) {
+      throw new Error(
+        `Bradbury transaction ${txHash} ended in ${humanizeTransactionStatus(snapshot.status)}.`,
+      );
+    }
+
+    if (options.isDone ? options.isDone(snapshot) : snapshot.finalized) {
+      return snapshot;
+    }
+
+    await delay(intervalMs);
+  }
+
+  throw new Error(
+    `Timed out waiting for Bradbury transaction ${txHash}. Last observed status: ${humanizeTransactionStatus(
+      lastSnapshot?.status ?? "UNKNOWN",
+    )}.`,
+  );
+}
+
+async function getConsensusTransactionStatus(
+  client: ReturnType<typeof createClient>,
+  txHash: Hash,
+): Promise<Omit<WatchConsensusTransactionSnapshot<never>, "value">> {
+  const raw = (await (client as { request: (args: unknown) => Promise<unknown> }).request({
+    method: "gen_getTransactionStatus",
+    params: [{ txId: txHash }],
+  })) as { status?: unknown; statusCode?: unknown };
+
+  const status = normaliseTransactionStatus(raw.status, raw.statusCode);
+  const statusCode = typeof raw.statusCode === "number" ? raw.statusCode : toNumber(raw.statusCode);
+
+  return {
+    txHash,
+    status,
+    statusCode: Number.isFinite(statusCode) ? statusCode : null,
+    accepted:
+      status === TransactionStatus.ACCEPTED ||
+      status === TransactionStatus.READY_TO_FINALIZE ||
+      status === TransactionStatus.FINALIZED,
+    finalized: status === TransactionStatus.FINALIZED,
+    readyToFinalize: status === TransactionStatus.READY_TO_FINALIZE,
+  };
+}
+
+function normaliseTransactionStatus(
+  status: unknown,
+  statusCode: unknown,
+): TransactionStatus | "UNKNOWN" {
+  if (typeof statusCode === "number" && STATUS_CODE_TO_NAME[statusCode] !== undefined) {
+    return STATUS_CODE_TO_NAME[statusCode];
+  }
+
+  if (typeof status === "string") {
+    const canonical = status.trim().replace(/[\s-]+/g, "_").toUpperCase();
+    const matched = Object.values(TransactionStatus).find(
+      (value) => value === canonical,
+    );
+    if (matched) return matched;
+  }
+
+  return "UNKNOWN";
+}
+
+function humanizeTransactionStatus(status: TransactionStatus | "UNKNOWN"): string {
+  return status === "UNKNOWN" ? "unknown state" : status.toLowerCase().replace(/_/g, " ");
+}
+
+async function computeClaimHash(
+  claimText: string,
+  sourceUrl: string,
+  submitter: Address0x,
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const claimBytes = encoder.encode(claimText);
+  const sourceBytes = encoder.encode(sourceUrl);
+  const submitterBytes = hexToBytes(submitter);
+  const payload = new Uint8Array(
+    claimBytes.length + 1 + sourceBytes.length + 1 + submitterBytes.length,
+  );
+
+  let offset = 0;
+  payload.set(claimBytes, offset);
+  offset += claimBytes.length;
+  payload[offset] = 0;
+  offset += 1;
+  payload.set(sourceBytes, offset);
+  offset += sourceBytes.length;
+  payload[offset] = 0;
+  offset += 1;
+  payload.set(submitterBytes, offset);
+
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", payload);
+  return `0x${bytesToHex(new Uint8Array(digest))}`;
+}
+
+function hexToBytes(value: string): Uint8Array {
+  const normalized = value.startsWith("0x") ? value.slice(2) : value;
+  const bytes = new Uint8Array(normalized.length / 2);
+  for (let i = 0; i < normalized.length; i += 2) {
+    bytes[i / 2] = Number.parseInt(normalized.slice(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lemma Verdict No. 0124 · verified</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ----------------------------------------------------------------------
+         Lemma · standalone preview of the verdict page.
+         Hand-rolled in plain CSS so it can be reviewed without booting Next.
+         The colors, type scale, and rules are identical to the live frontend.
+         ---------------------------------------------------------------------- */
+      :root {
+        --cream: #f5f0e6;
+        --paper: #ede6d6;
+        --ink: #1a1a1a;
+        --ink-soft: #4a4540;
+        --ink-muted: #8b8479;
+        --rust: #b85c2a;
+        --rust-deep: #8b4513;
+        --divider: #c7bfae;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--cream);
+        color: var(--ink);
+        font-family: "Newsreader", Georgia, serif;
+        font-feature-settings: "kern", "liga", "onum";
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+      ::selection { background: var(--rust); color: var(--cream); }
+
+      .frame {
+        max-width: 1024px;
+        margin: 0 auto;
+        padding: 2.5rem 5rem 3rem;
+      }
+      @media (max-width: 768px) {
+        .frame { padding: 1.5rem; }
+      }
+
+      /* Masthead -------------------------------------------------------- */
+      .masthead {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        padding-top: 2.5rem;
+        padding-bottom: 1rem;
+        gap: 1.5rem;
+      }
+      .masthead-meta {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--ink-muted);
+        margin: 0;
+      }
+      .wordmark {
+        font-family: "Newsreader", Georgia, serif;
+        font-size: 2rem;
+        line-height: 1;
+        margin: 0.25rem 0 0;
+        color: var(--ink);
+        text-decoration: none;
+      }
+      .wordmark .accent { color: var(--rust); }
+      .masthead-nav {
+        display: flex;
+        gap: 1.5rem;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+      }
+      .masthead-nav a {
+        color: var(--ink);
+        text-decoration: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+      .masthead-nav a:hover { text-decoration-thickness: 2px; }
+
+      hr.hairline { border: 0; border-top: 1px solid var(--divider); margin: 0; }
+      hr.hairline-strong { border: 0; border-top: 1px solid var(--ink-soft); margin: 0; }
+
+      /* The verdict article ---------------------------------------------- */
+      main { padding: 2.5rem 0; }
+      article {
+        max-width: 680px;
+      }
+
+      .editorial-label {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        font-weight: 500;
+        margin: 0;
+      }
+      section + section { margin-top: 4rem; }
+      section { position: relative; }
+
+      .nameplate {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--ink-muted);
+      }
+      .nameplate .appealed { color: var(--rust); margin-left: 0.75rem; }
+
+      .wordmark-display {
+        font-family: "Newsreader", Georgia, serif;
+        font-size: 4rem;
+        line-height: 1;
+        letter-spacing: -0.01em;
+        margin: 1rem 0 0;
+        color: var(--ink);
+        font-weight: 400;
+      }
+
+      .lead {
+        font-size: 1.125rem;
+        line-height: 1.7;
+        margin-top: 1.5rem;
+        color: var(--ink);
+      }
+      .lead.drop-cap::first-letter {
+        font-family: "Newsreader", Georgia, serif;
+        font-weight: 400;
+        font-size: 4.5rem;
+        line-height: 0.85;
+        float: left;
+        padding: 0.35rem 0.55rem 0 0;
+        color: var(--ink);
+      }
+
+      .claim-quote {
+        font-family: "Newsreader", Georgia, serif;
+        font-size: 1.5rem;
+        line-height: 1.35;
+        font-weight: 400;
+        margin: 1rem 0 0;
+        color: var(--ink);
+        font-style: normal;
+      }
+
+      .source-link {
+        display: inline-block;
+        margin-top: 0.75rem;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 1rem;
+        word-break: break-all;
+        color: var(--ink);
+        text-decoration: underline;
+        text-decoration-color: var(--ink-soft);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+      .source-link:hover { text-decoration-thickness: 2px; }
+      .source-context {
+        margin-top: 0.5rem;
+        font-style: italic;
+        font-size: 0.875rem;
+        color: var(--ink-soft);
+      }
+
+      .opinion {
+        margin-top: 1rem;
+        font-style: italic;
+        line-height: 1.65;
+        color: var(--ink);
+      }
+
+      .record {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+      }
+      @media (max-width: 600px) {
+        .record { grid-template-columns: 1fr; }
+      }
+      .field-label {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        margin: 0;
+      }
+      .field-value {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 1rem;
+        margin-top: 0.5rem;
+        color: var(--ink);
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4em;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.875rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink);
+        background: transparent;
+        border: 0;
+        padding: 0.25rem 0;
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 4px;
+      }
+      .btn:hover { text-decoration-thickness: 2px; }
+      .btn-primary {
+        text-decoration-color: var(--rust);
+        text-decoration-thickness: 2px;
+      }
+      .btn-primary:hover { color: var(--rust-deep); text-decoration-color: var(--rust-deep); }
+
+      .reference {
+        border-top: 1px solid var(--divider);
+        padding-top: 1.5rem;
+        margin-top: 4rem;
+      }
+      .reference p:nth-child(2) {
+        margin-top: 0.5rem;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--ink-soft);
+        word-break: break-all;
+      }
+
+      /* Footer ----------------------------------------------------------- */
+      footer.colophon {
+        margin-top: 4rem;
+        border-top: 1px solid var(--divider);
+        padding: 2rem 0 3rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 1.5rem;
+      }
+      @media (max-width: 600px) {
+        footer.colophon { grid-template-columns: 1fr; }
+      }
+      footer.colophon .editorial-label { margin-bottom: 0.5rem; }
+      footer.colophon p { margin: 0; font-size: 0.875rem; color: var(--ink-soft); line-height: 1.55; }
+      footer.colophon .mono {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.75rem;
+        color: var(--ink-soft);
+        word-break: break-all;
+      }
+      footer.colophon .right { text-align: right; }
+      @media (max-width: 600px) { footer.colophon .right { text-align: left; } }
+      footer.colophon a {
+        color: var(--ink);
+        text-decoration: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <!-- Masthead -->
+      <header class="masthead">
+        <div>
+          <p class="masthead-meta">Vol. I · Issue 1 · Bradbury Testnet</p>
+          <a href="/" class="wordmark">Lemma<span class="accent">.</span></a>
+        </div>
+        <nav class="masthead-nav">
+          <a href="/submit">Submit</a>
+          <a href="/dashboard">Dashboard</a>
+          <a href="/about">About</a>
+          <a href="#">Connect</a>
+        </nav>
+      </header>
+      <hr class="hairline" />
+
+      <main>
+        <article>
+          <header>
+            <p class="nameplate">Lemma · No. 0124</p>
+          </header>
+
+          <section style="margin-top: 2.5rem;">
+            <p class="editorial-label">Verdict</p>
+            <h1 class="wordmark-display">verified</h1>
+            <p class="lead drop-cap">
+              The claim is faithfully supported by the cited source. The
+              validators reached consensus on this label.
+            </p>
+          </section>
+
+          <hr class="hairline" style="margin-top: 4rem;" />
+
+          <section>
+            <p class="editorial-label">The claim</p>
+            <blockquote class="claim-quote">
+              &ldquo;Smith et al. (2023) demonstrated a 15% reduction in
+              training compute when applying gradient checkpointing to
+              transformer training at scale.&rdquo;
+            </blockquote>
+          </section>
+
+          <hr class="hairline" style="margin-top: 4rem;" />
+
+          <section>
+            <p class="editorial-label">Source</p>
+            <a href="#" class="source-link">arxiv.org/abs/2310.12345 →</a>
+            <p class="source-context">Section 4.2 (Compute Savings)</p>
+          </section>
+
+          <hr class="hairline" style="margin-top: 4rem;" />
+
+          <section>
+            <p class="editorial-label">Jury opinion</p>
+            <p class="opinion">
+              The cited section explicitly reports a 15.2% reduction in
+              floating-point operations during training when activation
+              checkpointing is applied, matching the claim within stated
+              precision.
+            </p>
+          </section>
+
+          <hr class="hairline" style="margin-top: 4rem;" />
+
+          <section>
+            <div class="record">
+              <div>
+                <p class="field-label">Submitted by</p>
+                <p class="field-value">0x4a8c…8f3b</p>
+              </div>
+              <div>
+                <p class="field-label">Stake consumed</p>
+                <p class="field-value">0.005 GEN</p>
+              </div>
+              <div>
+                <p class="field-label">Issue number</p>
+                <p class="field-value">No. 0124</p>
+              </div>
+              <div>
+                <p class="field-label">Appeals</p>
+                <p class="field-value">0 / 1</p>
+              </div>
+            </div>
+          </section>
+
+          <hr class="hairline-strong" style="margin-top: 4rem;" />
+
+          <section class="actions" style="margin-top: 2rem;">
+            <button type="button" class="btn">Cite this →</button>
+            <button type="button" class="btn">Appeal verdict →</button>
+          </section>
+
+          <section class="reference">
+            <p class="editorial-label">Permanent reference</p>
+            <p>lemma://verdict/0xab32cd5f4e7b8a9c1d0e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5</p>
+          </section>
+        </article>
+      </main>
+
+      <!-- Footer / colophon -->
+      <footer class="colophon">
+        <div>
+          <p class="editorial-label">Colophon</p>
+          <p>
+            Set in Newsreader and IBM Plex Mono. Pressed on the GenLayer
+            Bradbury Testnet. Verdicts are issued by a jury of independent
+            validators applying the equivalence principle.
+          </p>
+        </div>
+        <div>
+          <p class="editorial-label">Contract</p>
+          <p class="mono">0x0000000000000000000000000000000000000000</p>
+        </div>
+        <div class="right">
+          <p class="editorial-label">Open source</p>
+          <a href="https://github.com/Zhekinmaksim/lemma" class="mono">github.com/Zhekinmaksim/lemma →</a>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,683 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================================
+   Lemma · global styles
+   ===========================================================================
+
+   Editorial / journal aesthetic per the design handoff. All visual rules
+   live in this file or in tailwind.config.ts; nothing is hardcoded in
+   components. The tokens here are CSS-variable mirrors of the Tailwind
+   theme so components can compose either form at will.
+   =========================================================================== */
+
+:root {
+  --lemma-cream: #f5f0e6;
+  --lemma-paper: #ede6d6;
+  --lemma-ink: #1a1a1a;
+  --lemma-ink-soft: #4a4540;
+  --lemma-ink-muted: #8b8479;
+  --lemma-rust: #b85c2a;
+  --lemma-rust-deep: #8b4513;
+  --lemma-divider: #c7bfae;
+  --lemma-error: #8b2e2e;
+  --lemma-success: #2c5530;
+}
+
+/* Hard-zero every border-radius. The design has no rounded corners by
+   intent; this catches anything that slips past the Tailwind config. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-radius: 0;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--lemma-cream);
+  color: var(--lemma-ink);
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 17px;
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern", "liga", "onum"; /* oldstyle figures by default */
+}
+
+::selection {
+  background: var(--lemma-rust);
+  color: var(--lemma-cream);
+}
+
+/* Scrollbar in warm, quiet tones */
+* {
+  scrollbar-color: var(--lemma-divider) var(--lemma-cream);
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--lemma-cream);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--lemma-divider);
+  border: 2px solid var(--lemma-cream);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--lemma-ink-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Reusable type classes
+   --------------------------------------------------------------------------- */
+
+.mono {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  letter-spacing: -0.01em;
+  font-feature-settings: "tnum";
+}
+
+/* Small uppercase mono used for dateline, section labels, attributions */
+.caps-sm {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Metadata: smaller, muted */
+.meta {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--lemma-ink-muted);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Underlined link - the canonical link style
+   --------------------------------------------------------------------------- */
+
+.u-link {
+  color: var(--lemma-ink);
+  border-bottom: 1px solid var(--lemma-ink);
+  padding-bottom: 1px;
+  transition:
+    border-width 100ms linear,
+    color 100ms linear,
+    border-color 100ms linear;
+}
+.u-link:hover {
+  border-bottom-width: 2px;
+  padding-bottom: 0;
+}
+.u-link.rust {
+  border-bottom-color: var(--lemma-rust);
+}
+.u-link.rust:hover {
+  border-bottom-color: var(--lemma-rust-deep);
+  color: var(--lemma-rust-deep);
+}
+.u-link.muted {
+  color: var(--lemma-ink-muted);
+  border-bottom-color: var(--lemma-divider);
+}
+
+/* ---------------------------------------------------------------------------
+   CTA - same mono caps treatment, rust 2px underline
+   --------------------------------------------------------------------------- */
+
+.cta {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lemma-ink);
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  border-bottom: 2px solid var(--lemma-rust);
+  cursor: pointer;
+  transition:
+    border-color 100ms linear,
+    color 100ms linear;
+  display: inline-block;
+}
+.cta:hover:not(:disabled) {
+  border-bottom-color: var(--lemma-rust-deep);
+  color: var(--lemma-rust-deep);
+}
+.cta:disabled {
+  color: var(--lemma-ink-muted);
+  border-bottom: 1px dotted var(--lemma-ink-muted);
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   Topbar - nav link hover (inline-styled in JSX needs CSS for :hover)
+   --------------------------------------------------------------------------- */
+
+.topbar-nav {
+  gap: 1.75rem;
+}
+.topbar nav > a {
+  transition: color 100ms linear;
+}
+.topbar nav > a:hover {
+  color: var(--lemma-ink) !important;
+}
+@media (max-width: 720px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .topbar-nav {
+    flex-wrap: wrap;
+    gap: 0.8rem 1.25rem;
+    width: 100%;
+  }
+  .masthead-title {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+  .masthead-title > p {
+    max-width: none !important;
+    text-align: left !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Wallet connect button - same mono caps, ink underline, three states
+   --------------------------------------------------------------------------- */
+
+.wallet-btn {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lemma-ink);
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--lemma-ink);
+  cursor: pointer;
+  transition: border-width 100ms linear;
+  display: inline-flex;
+  align-items: baseline;
+}
+.wallet-btn:hover:not(:disabled) {
+  border-bottom-width: 2px;
+}
+.wallet-btn:disabled {
+  cursor: default;
+}
+.wallet-btn.connected {
+  color: var(--lemma-success);
+  border-bottom-color: var(--lemma-success);
+}
+.wallet-btn .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--lemma-success);
+  margin-right: 0.5em;
+  vertical-align: 0.08em;
+}
+
+/* ---------------------------------------------------------------------------
+   Blinking caret - the only motion allowed besides hover and the feed tint
+   --------------------------------------------------------------------------- */
+
+.caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.05em;
+  background: var(--lemma-rust);
+  margin-left: 0.2em;
+  vertical-align: -0.18em;
+  animation: blink 1s steps(2, end) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Page shell
+   --------------------------------------------------------------------------- */
+
+.shell {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 2.25rem 5rem 6rem;
+}
+@media (max-width: 760px) {
+  .shell {
+    padding: 1.5rem 2rem 4rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Verdict word - used in feed rows
+   --------------------------------------------------------------------------- */
+
+.verdict-word {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--lemma-ink);
+}
+.verdict-word.misrepresented {
+  color: var(--lemma-rust-deep);
+}
+.verdict-word.partially_verified {
+  color: var(--lemma-ink);
+  border-bottom: 2px solid var(--lemma-rust);
+  padding-bottom: 1px;
+}
+.verdict-word.unsupported {
+  font-style: italic;
+  color: var(--lemma-ink-soft);
+}
+.verdict-word.unverifiable {
+  color: var(--lemma-ink-muted);
+  font-style: italic;
+}
+
+/* On the verdict page itself, the same labels render at display scale.
+   We keep them in a separate class set so the feed style stays
+   self-contained. */
+.verdict-display {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 4rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-weight: 400;
+  color: var(--lemma-ink);
+}
+.verdict-display.misrepresented {
+  color: var(--lemma-rust-deep);
+  font-weight: 500;
+}
+.verdict-display.partially_verified {
+  color: var(--lemma-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--lemma-rust);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+}
+.verdict-display.unsupported {
+  color: var(--lemma-ink-soft);
+  font-style: italic;
+}
+.verdict-display.unverifiable {
+  color: var(--lemma-ink-muted);
+}
+
+.settlement-note {
+  display: inline-block;
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.settlement-note.accepted {
+  color: var(--lemma-rust-deep);
+}
+.settlement-note.finalized {
+  color: var(--lemma-success);
+}
+
+/* ---------------------------------------------------------------------------
+   Drop cap (intro and verdict description)
+   --------------------------------------------------------------------------- */
+
+.dropcap::first-letter {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-weight: 500;
+  font-size: 5.8rem;
+  line-height: 0.86;
+  float: left;
+  padding: 0.35rem 0.7rem 0 0;
+  color: var(--lemma-rust-deep);
+}
+
+/* ---------------------------------------------------------------------------
+   Hairlines and ornamental dividers
+   --------------------------------------------------------------------------- */
+
+.hairline {
+  border: 0;
+  border-top: 1px solid var(--lemma-divider);
+  margin: 0;
+}
+.hairline-ink {
+  border: 0;
+  border-top: 1px solid var(--lemma-ink);
+  margin: 0;
+}
+.double-rule {
+  border: 0;
+  border-top: 1px solid var(--lemma-ink);
+  border-bottom: 1px solid var(--lemma-ink);
+  height: 4px;
+  margin: 0;
+}
+
+/* "§ § §" ornament. The wide letter-spacing pushes the third glyph
+   slightly off-centre; padding-right pulls it back. */
+.ornament {
+  text-align: center;
+  color: var(--lemma-ink-muted);
+  font-size: 1.2rem;
+  padding: 3rem 0;
+  letter-spacing: 1.4em;
+  padding-right: 1.4em;
+  user-select: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Legacy utility classes used by inner pages (Submit, About, Verdict,
+   Dashboard). Kept alongside the handoff-specified landing classes so
+   the rest of the site keeps working without rewriting every component.
+   --------------------------------------------------------------------------- */
+
+/* Small-caps mono label (used as section opener: "THE CLAIM") */
+.editorial-label {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lemma-ink-soft);
+  font-weight: 500;
+}
+
+/* Strong hairline divider (matches .hairline-ink, kept for inner pages
+   that already imported the older name) */
+.hairline-strong {
+  border: 0;
+  border-top: 1px solid var(--lemma-ink-soft);
+  margin: 0;
+}
+
+/* Alias the older drop-cap class to the new dropcap */
+.drop-cap::first-letter {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-weight: 400;
+  font-size: 4.5rem;
+  line-height: 0.85;
+  float: left;
+  padding: 0.35rem 0.55rem 0 0;
+  color: var(--lemma-ink);
+}
+
+/* Marginalia: italic notes set in the right margin on wide screens */
+.marginalia {
+  font-style: italic;
+  font-size: 0.875rem;
+  color: var(--lemma-ink-muted);
+  line-height: 1.5;
+}
+
+/* Buttons (legacy `.btn` / `.btn-primary`) - used in the appeal flow,
+   the cite modal, and the submit form's primary action. These share
+   the .cta visual language but the markup uses the older class names
+   from when the project was first scaffolded. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lemma-ink);
+  background: transparent;
+  border: 0;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--lemma-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  transition:
+    text-decoration-thickness 100ms ease,
+    color 100ms ease;
+}
+.btn:hover:not(:disabled) {
+  text-decoration-thickness: 2px;
+}
+.btn-primary {
+  text-decoration-color: var(--lemma-rust);
+  text-decoration-thickness: 2px;
+}
+.btn-primary:hover:not(:disabled) {
+  color: var(--lemma-rust-deep);
+  text-decoration-color: var(--lemma-rust-deep);
+}
+.btn:disabled {
+  color: var(--lemma-ink-muted);
+  text-decoration-style: dotted;
+  cursor: not-allowed;
+}
+
+/* Form inputs: bottom-border-only, no fill */
+.input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--lemma-ink);
+  color: var(--lemma-ink);
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1.125rem;
+  line-height: 1.6;
+  padding: 0.5rem 0;
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.input:focus {
+  border-bottom: 2px solid var(--lemma-rust);
+  padding-bottom: calc(0.5rem - 1px);
+}
+.input::placeholder {
+  font-style: italic;
+  color: var(--lemma-ink-muted);
+}
+.input-mono {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.95rem;
+  letter-spacing: -0.005em;
+}
+.textarea {
+  min-height: 8rem;
+  resize: vertical;
+  font-family: var(--font-newsreader), Georgia, serif;
+}
+
+/* Legacy blinking-caret variant (text-based) used by older state-block
+   loading copy. The newer wallet caret (.caret) is a full block element
+   in rust; .caret-blink is an inline cursor in ink that follows the
+   final word of the paragraph. */
+.caret-blink::after {
+  content: "▍";
+  display: inline-block;
+  margin-left: 0.1em;
+  color: var(--lemma-ink);
+  animation: caret-blink-frames 1s steps(1) infinite;
+}
+@keyframes caret-blink-frames {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Page transition: 200ms crossfade on route changes */
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fadein 200ms ease-out;
+}
+
+/* ---------------------------------------------------------------------------
+   Verdict feed
+   --------------------------------------------------------------------------- */
+
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.feed-row {
+  align-items: baseline;
+  border-bottom: 1px solid var(--lemma-divider);
+  display: grid;
+  gap: 0 1.4rem;
+  grid-template-columns: 5.5rem 1fr;
+  padding: 1.5rem 0;
+  transition: background 120ms linear;
+}
+.feed-row.last {
+  border-bottom-color: var(--lemma-ink);
+}
+.feed-row-link {
+  display: contents;
+}
+.feed-sequence {
+  color: var(--lemma-ink-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  padding-top: 0.35rem;
+}
+.feed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.feed-verdict {
+  align-items: baseline;
+  display: flex;
+  gap: 0.6rem;
+}
+.feed-appeal {
+  color: var(--lemma-rust);
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+}
+.feed-settlement {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.feed-settlement.accepted {
+  color: var(--lemma-rust-deep);
+}
+.feed-settlement.finalized {
+  color: var(--lemma-success);
+}
+.feed-claim {
+  color: var(--lemma-ink);
+  font-size: 1.08rem;
+  line-height: 1.5;
+  margin: 0;
+  text-wrap: pretty;
+}
+.feed-citation {
+  color: var(--lemma-ink-soft);
+  font-size: 0.95rem;
+}
+.feed-citation .src {
+  border-bottom: 1px solid var(--lemma-divider);
+  padding-bottom: 1px;
+  transition: border-color 120ms linear;
+}
+.feed-meta {
+  align-items: baseline;
+  display: flex;
+  font-size: 0.72rem;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  padding-top: 0.15rem;
+}
+.feed-meta-primary {
+  color: var(--lemma-ink-soft);
+}
+.feed-meta-sep,
+.feed-meta-muted {
+  color: var(--lemma-ink-muted);
+}
+.feed-row:hover {
+  background: rgba(199, 191, 174, 0.16);
+}
+.feed-row:hover .src {
+  border-bottom-color: var(--lemma-rust);
+}
+
+/* The feed claim quotation glyphs render as pseudo-elements so they
+   keep the right tonal weight (muted) without forcing curly quotes
+   inside the JSX text node. */
+p.claim::before {
+  content: "“";
+  color: var(--lemma-ink-muted);
+  margin-right: 0.05em;
+}
+p.claim::after {
+  content: "”";
+  color: var(--lemma-ink-muted);
+  margin-left: 0.05em;
+}
+
+/* ---------------------------------------------------------------------------
+   How it works responsive collapse
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  section.how.grid {
+    grid-template-columns: 1fr !important;
+    gap: 2rem !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Footer responsive collapse
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  footer.grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Print: render verdict pages as if they were the document they imitate
+   --------------------------------------------------------------------------- */
+
+@media print {
+  html,
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

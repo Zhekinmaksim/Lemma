@@ -29,7 +29,7 @@ export default function RootLayout({
       <body>
         <div className="shell">
           <Topbar />
-          <main>{children}</main>
+          <main className="page-main">{children}</main>
           <Footer />
         </div>
       </body>

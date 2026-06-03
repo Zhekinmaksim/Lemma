@@ -28,7 +28,7 @@ export function LandingMasthead({ date }: LandingMastheadProps) {
   const dateline = formatDateline(date ?? new Date());
 
   return (
-    <section className="masthead" style={{ paddingTop: "3.5rem" }}>
+    <section className="masthead" style={{ paddingTop: "1.2rem" }}>
       {/* Dateline ---------------------------------------------------- */}
       <div
         className="dateline caps-sm flex"

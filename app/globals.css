@@ -266,9 +266,18 @@ a {
   margin: 0 auto;
   padding: 2.25rem 3.5rem 6rem;
 }
+
+.page-main {
+  padding-top: 2.35rem;
+}
+
 @media (max-width: 760px) {
   .shell {
     padding: 1.5rem 2rem 4rem;
+  }
+
+  .page-main {
+    padding-top: 1.85rem;
   }
 }
 

@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lemma Recording Scene 01</title>
+    <style>
+      :root {
+        --cream: #f5f0e6;
+        --paper: #ede6d6;
+        --ink: #1a1a1a;
+        --ink-soft: #4a4540;
+        --ink-muted: #8b8479;
+        --rust: #b85c2a;
+        --divider: #c7bfae;
+        --shadow: rgba(26, 26, 26, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--cream);
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", serif;
+      }
+
+      body.paused * {
+        animation-play-state: paused !important;
+      }
+
+      .scene {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background:
+          linear-gradient(to bottom, rgba(245, 240, 230, 0.98), rgba(237, 230, 214, 0.94)),
+          radial-gradient(circle at top left, rgba(184, 92, 42, 0.06), transparent 38%);
+      }
+
+      .grain,
+      .vignette,
+      .scrim {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .grain {
+        opacity: 0.04;
+        background-image:
+          linear-gradient(rgba(0, 0, 0, 0.18) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+        background-size: 4px 4px, 5px 5px;
+        mix-blend-mode: multiply;
+      }
+
+      .vignette {
+        background:
+          radial-gradient(circle at center, transparent 48%, rgba(26, 26, 26, 0.05) 100%);
+      }
+
+      .scrim {
+        background:
+          linear-gradient(to top, rgba(245, 240, 230, 0.88) 0%, rgba(245, 240, 230, 0) 20%);
+      }
+
+      .column {
+        position: absolute;
+        top: -10%;
+        bottom: -10%;
+        width: 27vw;
+        overflow: hidden;
+        opacity: 0.3;
+      }
+
+      .column.left {
+        left: -1vw;
+        transform: rotate(-2deg);
+      }
+
+      .column.center {
+        left: 36vw;
+        width: 30vw;
+        opacity: 0.24;
+      }
+
+      .column.right {
+        right: -2vw;
+        transform: rotate(2deg);
+      }
+
+      .ticker {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+        font-size: 0.94rem;
+        line-height: 1.45;
+        color: rgba(74, 69, 64, 0.92);
+        animation: ticker-up 12s linear infinite;
+      }
+
+      .ticker.reverse {
+        animation-direction: reverse;
+        animation-duration: 15s;
+      }
+
+      .ticker.slower {
+        animation-duration: 18s;
+      }
+
+      .ticker p {
+        margin: 0;
+        padding: 0 1.25rem;
+      }
+
+      .muted {
+        color: var(--ink-muted);
+      }
+
+      .stack {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .paper {
+        position: absolute;
+        background: rgba(237, 230, 214, 0.96);
+        border: 1px solid rgba(199, 191, 174, 0.96);
+        box-shadow: 0 14px 28px rgba(26, 26, 26, 0.05);
+        padding: 1.05rem 1.15rem 1rem;
+        opacity: 0;
+        animation: paper-cycle 12s ease-in-out infinite;
+      }
+
+      .paper::before {
+        content: "";
+        display: block;
+        width: 5.5rem;
+        border-top: 2px solid var(--rust);
+        margin-bottom: 0.8rem;
+      }
+
+      .paper h3 {
+        margin: 0 0 0.4rem;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+
+      .paper .meta {
+        margin: 0 0 0.7rem;
+        font-family: "SFMono-Regular", ui-monospace, monospace;
+        font-size: 0.69rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+
+      .paper p {
+        margin: 0;
+        font-size: 0.92rem;
+        line-height: 1.5;
+        color: var(--ink-soft);
+      }
+
+      .paper.a {
+        top: 11vh;
+        left: 8vw;
+        width: 29vw;
+        transform: rotate(-4deg);
+        animation-delay: 0s;
+      }
+
+      .paper.b {
+        top: 18vh;
+        right: 9vw;
+        width: 27vw;
+        transform: rotate(3deg);
+        animation-delay: 1.5s;
+      }
+
+      .paper.c {
+        top: 38vh;
+        left: 18vw;
+        width: 31vw;
+        transform: rotate(2deg);
+        animation-delay: 3.2s;
+      }
+
+      .paper.d {
+        top: 48vh;
+        right: 17vw;
+        width: 24vw;
+        transform: rotate(-3deg);
+        animation-delay: 5s;
+      }
+
+      .paper.e {
+        top: 24vh;
+        left: 41vw;
+        width: 26vw;
+        transform: rotate(1deg);
+        animation-delay: 6.8s;
+      }
+
+      .paper.f {
+        top: 58vh;
+        left: 54vw;
+        width: 25vw;
+        transform: rotate(-2deg);
+        animation-delay: 8.4s;
+      }
+
+      .flash {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(70vw, 980px);
+        transform: translate(-50%, -50%);
+        text-align: center;
+        color: var(--ink);
+        pointer-events: none;
+      }
+
+      .flash-line {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        animation: flash-copy 12s ease-in-out infinite;
+      }
+
+      .flash-line q {
+        display: block;
+        margin: 0 auto 0.75rem;
+        max-width: 18ch;
+        font-size: clamp(2rem, 5vw, 4.4rem);
+        line-height: 0.96;
+        color: rgba(26, 26, 26, 0.9);
+      }
+
+      .flash-line span {
+        display: inline-block;
+        font-family: "SFMono-Regular", ui-monospace, monospace;
+        font-size: 0.76rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--rust);
+      }
+
+      .flash-line.one {
+        animation-delay: 1s;
+      }
+
+      .flash-line.two {
+        animation-delay: 4.7s;
+      }
+
+      .flash-line.three {
+        animation-delay: 8.2s;
+      }
+
+      .compare-stage {
+        position: absolute;
+        inset: 8vh 7vw 12vh;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 2.5rem;
+        align-items: start;
+        pointer-events: none;
+        z-index: 3;
+      }
+
+      .compare-panel {
+        position: relative;
+        min-height: 18rem;
+        padding: 1.35rem 1.4rem 1.3rem;
+        background: rgba(237, 230, 214, 0.97);
+        border: 1px solid rgba(199, 191, 174, 0.96);
+        box-shadow: 0 18px 34px rgba(26, 26, 26, 0.05);
+        opacity: 0;
+        transform: translateY(24px);
+        animation: compare-panel 12s ease-in-out infinite;
+      }
+
+      .compare-panel.right {
+        animation-delay: 0.24s;
+      }
+
+      .compare-label {
+        display: inline-block;
+        margin-bottom: 0.9rem;
+        font-family: "SFMono-Regular", ui-monospace, monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--rust);
+      }
+
+      .compare-url {
+        display: block;
+        margin: -0.1rem 0 1rem;
+        font-family: "SFMono-Regular", ui-monospace, monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.02em;
+        color: var(--ink-muted);
+      }
+
+      .compare-panel p {
+        margin: 0;
+        font-size: 1.22rem;
+        line-height: 1.55;
+        color: var(--ink-soft);
+      }
+
+      .compare-panel strong {
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .highlight-claim,
+      .highlight-source {
+        position: relative;
+        display: inline;
+        background-image: linear-gradient(
+          rgba(184, 92, 42, 0.14),
+          rgba(184, 92, 42, 0.14)
+        );
+        background-repeat: no-repeat;
+        background-position: 0 82%;
+        background-size: 100% 0.68em;
+      }
+
+      .highlight-claim::after,
+      .highlight-source::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -0.12em;
+        border-bottom: 2px solid var(--rust);
+      }
+
+      .compare-note {
+        margin-top: 1rem;
+        font-family: "SFMono-Regular", ui-monospace, monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+
+      .cursor-path {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        animation: compare-overlay 12s ease-in-out infinite;
+      }
+
+      .cursor-line {
+        position: absolute;
+        left: 39%;
+        top: 46%;
+        width: 18%;
+        border-top: 1px solid rgba(184, 92, 42, 0.55);
+        transform: rotate(-11deg);
+        transform-origin: left center;
+      }
+
+      .cursor-dot {
+        position: absolute;
+        left: 34.5%;
+        top: 45%;
+        width: 15px;
+        height: 15px;
+        border: 1px solid rgba(184, 92, 42, 0.85);
+        background: rgba(245, 240, 230, 0.96);
+        border-radius: 50%;
+        box-shadow: 0 0 0 5px rgba(184, 92, 42, 0.08);
+        animation: cursor-travel 12s ease-in-out infinite;
+      }
+
+      .cursor-dot::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 5px;
+        height: 5px;
+        background: var(--rust);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .kbd {
+        position: absolute;
+        top: 2.2vh;
+        right: 2vw;
+        padding: 0.55rem 0.75rem;
+        background: rgba(237, 230, 214, 0.72);
+        border: 1px solid var(--divider);
+        font-family: "SFMono-Regular", ui-monospace, monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        z-index: 5;
+        opacity: 0;
+        transition: opacity 120ms linear;
+      }
+
+      body:hover .kbd {
+        opacity: 1;
+      }
+
+      @keyframes ticker-up {
+        from {
+          transform: translateY(0);
+        }
+        to {
+          transform: translateY(-42%);
+        }
+      }
+
+      @keyframes paper-cycle {
+        0% {
+          opacity: 0;
+          transform: translateY(34px) scale(0.98);
+        }
+        8% {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+        23% {
+          opacity: 1;
+          transform: translateY(-8px) scale(1.01);
+        }
+        32% {
+          opacity: 0;
+          transform: translateY(-28px) scale(1.02);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-28px) scale(1.02);
+        }
+      }
+
+      @keyframes flash-copy {
+        0% {
+          opacity: 0;
+          transform: translateY(24px);
+        }
+        10% {
+          opacity: 0.95;
+          transform: translateY(0);
+        }
+        18% {
+          opacity: 0.95;
+          transform: translateY(0);
+        }
+        24% {
+          opacity: 0;
+          transform: translateY(-18px);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-18px);
+        }
+      }
+
+      @keyframes compare-overlay {
+        0%,
+        42% {
+          opacity: 0;
+        }
+        48%,
+        88% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes compare-panel {
+        0%,
+        44% {
+          opacity: 0;
+          transform: translateY(24px);
+        }
+        50% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        86% {
+          opacity: 1;
+          transform: translateY(-4px);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-16px);
+        }
+      }
+
+      @keyframes cursor-travel {
+        0%,
+        56% {
+          transform: translate(0, 0) scale(0.92);
+          opacity: 0;
+        }
+        60% {
+          transform: translate(0, 0) scale(1);
+          opacity: 1;
+        }
+        74% {
+          transform: translate(15vw, 3.6vh) scale(1);
+          opacity: 1;
+        }
+        86% {
+          transform: translate(15vw, 3.6vh) scale(1);
+          opacity: 1;
+        }
+        100% {
+          transform: translate(15vw, 3.6vh) scale(0.96);
+          opacity: 0;
+        }
+      }
+
+      @media (max-width: 980px) {
+        .column {
+          width: 35vw;
+        }
+
+        .paper {
+          width: 38vw !important;
+        }
+
+        .compare-stage {
+          inset: 8vh 5vw 12vh;
+          gap: 1.4rem;
+        }
+
+        .compare-panel p {
+          font-size: 1.08rem;
+        }
+
+      }
+
+      @media (max-width: 720px) {
+        .column.center,
+        .paper.e,
+        .paper.f {
+          display: none;
+        }
+
+        .column {
+          width: 52vw;
+          opacity: 0.22;
+        }
+
+        .paper {
+          width: 62vw !important;
+          padding: 0.9rem 0.95rem 0.9rem;
+        }
+
+        .paper.a {
+          top: 12vh;
+          left: 5vw;
+        }
+
+        .paper.b {
+          top: 26vh;
+          right: 4vw;
+        }
+
+        .paper.c {
+          top: 44vh;
+          left: 7vw;
+        }
+
+        .paper.d {
+          top: 58vh;
+          right: 6vw;
+        }
+
+        .flash-line q {
+          max-width: 12ch;
+          font-size: clamp(1.8rem, 10vw, 3.2rem);
+        }
+
+        .compare-stage {
+          inset: 6vh 5vw 15vh;
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
+
+        .compare-panel {
+          min-height: 0;
+          padding: 1rem 1rem 0.95rem;
+        }
+
+        .compare-panel p {
+          font-size: 0.98rem;
+        }
+
+        .cursor-path {
+          display: none;
+        }
+
+        .kbd {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="scene">
+      <div class="column left">
+        <div class="ticker">
+          <p>“The findings suggest a stronger causal link than previously reported.”</p>
+          <p class="muted">Thread: “Did the paper actually say that? The conclusion looks softer.”</p>
+          <p>“According to the source, the model exceeded expert-level performance...”</p>
+          <p class="muted">Post excerpt: “The citation points to a preprint, but the quoted sentence is missing.”</p>
+          <p>“This study proves that synthetic data can replace field collection entirely.”</p>
+          <p class="muted">Commentary: “Replace? The authors wrote supplement, not replacement.”</p>
+          <p>“Researchers confirmed the image was generated and later mislabeled as archival evidence.”</p>
+          <p class="muted">Reply: “Source link is real, interpretation is doing too much work.”</p>
+          <p>“Our benchmark establishes definitive superiority across all medical tasks.”</p>
+          <p class="muted">Note: “Across all tasks is not in the cited paragraph.”</p>
+          <p>“The article attributes the quote to the original investigator.”</p>
+          <p class="muted">“But the source only cites a secondary summary.”</p>
+        </div>
+      </div>
+
+      <div class="column center">
+        <div class="ticker reverse">
+          <p class="muted">Journal abstract: “Evidence remains limited and context-dependent.”</p>
+          <p>“A viral post reframed uncertainty as consensus within hours.”</p>
+          <p class="muted">Excerpt: “The reported effect size did not generalize outside the study cohort.”</p>
+          <p>“An AI answer cited the paper correctly but described a different result.”</p>
+          <p class="muted">“The source is valid. The claim is not.”</p>
+          <p>“The dataset was never intended as a public ranking of institutional quality.”</p>
+          <p class="muted">Comment: “Quoted line exists, but its scope was narrowed in the next sentence.”</p>
+          <p>“The study authors explicitly refused the policy conclusion later attributed to them.”</p>
+          <p class="muted">“Original wording: preliminary, exploratory, incomplete.”</p>
+          <p>“Repost: ‘Scientists prove...’ Source: ‘Initial evidence may indicate...’”</p>
+        </div>
+      </div>
+
+      <div class="column right">
+        <div class="ticker slower">
+          <p>“The system cites five sources, but only one addresses the actual claim.”</p>
+          <p class="muted">Forum note: “Link rot, screenshots, paraphrases, clipped quotations.”</p>
+          <p>“What was published as a careful estimate was retold as a hard fact.”</p>
+          <p class="muted">“The article is real. The wording is inflated.”</p>
+          <p>“Observers treated a probabilistic model output as documentary proof.”</p>
+          <p class="muted">“Primary source unavailable; only tertiary summaries remain.”</p>
+          <p>“The paper mentions correlation, while the post claims causation.”</p>
+          <p class="muted">“Quote fragment preserved, surrounding qualifier removed.”</p>
+          <p>“Citation verified. Interpretation disputed. Final status pending.”</p>
+          <p class="muted">“A faithful citation record needs adjudication, not just links.”</p>
+        </div>
+      </div>
+
+      <div class="stack">
+        <article class="paper a">
+          <h3>Research digest overstates source conclusion</h3>
+          <p class="meta">Article · 09:14 UTC</p>
+          <p>
+            The summary claims the paper “proves broad adoption benefits,” while the cited section
+            only describes an early pilot with mixed results and unresolved controls.
+          </p>
+        </article>
+
+        <article class="paper b">
+          <h3>Quoted sentence exists, but context reverses meaning</h3>
+          <p class="meta">Post · Thread capture</p>
+          <p>
+            A clipped citation removes the next clause, where the authors narrow the claim and
+            classify the result as preliminary rather than established.
+          </p>
+        </article>
+
+        <article class="paper c">
+          <h3>Secondary summary credited as primary evidence</h3>
+          <p class="meta">Editorial note</p>
+          <p>
+            The linked page points to a commentary that references the study, but not to the
+            original section used to justify the statement now circulating online.
+          </p>
+        </article>
+
+        <article class="paper d">
+          <h3>Link is valid. Claim is not.</h3>
+          <p class="meta">Verification memo</p>
+          <p>
+            The source URL resolves correctly, yet the cited document does not support the wording
+            used in the post. The mismatch is interpretive, not technical.
+          </p>
+        </article>
+
+        <article class="paper e">
+          <h3>AI answer cites paper, then drifts beyond evidence</h3>
+          <p class="meta">Model output review</p>
+          <p>
+            The first sentence tracks the abstract. The second introduces certainty absent from the
+            source and attributes conclusions the authors did not make.
+          </p>
+        </article>
+
+        <article class="paper f">
+          <h3>Provenance gets lost faster than links can be copied</h3>
+          <p class="meta">Archive snapshot</p>
+          <p>
+            By the fourth repost, the citation remains, but the chain of authorship and the original
+            scope of the claim have already been blurred beyond recognition.
+          </p>
+        </article>
+      </div>
+
+      <div class="flash" aria-hidden="true">
+        <div class="flash-line one">
+          <q>“The source is real. The claim is not.”</q>
+          <span>citation dispute</span>
+        </div>
+        <div class="flash-line two">
+          <q>“Quoted correctly. Framed incorrectly.”</q>
+          <span>context lost</span>
+        </div>
+        <div class="flash-line three">
+          <q>“Links are easy. Provenance is harder.”</q>
+          <span>record pending</span>
+        </div>
+      </div>
+
+      <div class="compare-stage" aria-hidden="true">
+        <section class="compare-panel left">
+          <span class="compare-label">Claim</span>
+          <p>
+            Attention Is All You Need demonstrated that the Transformer
+            <span class="highlight-claim">reduced training costs by 15%</span>
+            compared with recurrent models.
+          </p>
+          <div class="compare-note">statement prepared for submission</div>
+        </section>
+
+        <section class="compare-panel right">
+          <span class="compare-label">Source</span>
+          <span class="compare-url">https://arxiv.org/abs/1706.03762</span>
+          <p>
+            The Transformer allows for significantly more parallelization and can reach a new state
+            of the art in translation quality after being
+            <span class="highlight-source">trained for as little as twelve hours</span>
+            on eight P100 GPUs.
+          </p>
+          <div class="compare-note">arxiv abstract / wording close, number missing</div>
+        </section>
+
+        <div class="cursor-path">
+          <div class="cursor-line"></div>
+          <div class="cursor-dot"></div>
+        </div>
+      </div>
+
+      <div class="kbd">Space = pause</div>
+      <div class="grain"></div>
+      <div class="vignette"></div>
+      <div class="scrim"></div>
+    </main>
+
+    <script>
+      window.addEventListener("keydown", (event) => {
+        if (event.code === "Space") {
+          event.preventDefault();
+          document.body.classList.toggle("paused");
+        }
+      });
+    </script>
+  </body>
+</html>

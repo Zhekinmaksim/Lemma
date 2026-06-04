@@ -80,9 +80,6 @@ const TERMINAL_FAILURE_STATUSES = new Set<TransactionStatus>([
   TransactionStatus.LEADER_TIMEOUT,
 ]);
 
-const WRITE_RETRY_ATTEMPTS = 3;
-const WRITE_RETRY_DELAY_MS = 1500;
-
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -850,25 +847,7 @@ async function writeContractWithRetry(
   client: ReturnType<typeof createClient>,
   request: Parameters<ReturnType<typeof createClient>["writeContract"]>[0],
 ): Promise<Hash> {
-  for (let attempt = 1; attempt <= WRITE_RETRY_ATTEMPTS; attempt += 1) {
-    try {
-      return await client.writeContract(request);
-    } catch (error) {
-      const message = extractErrorText(error).toLowerCase();
-      const canRetry =
-        message.includes("transaction reverted: evm tx") &&
-        message.includes("consensus contract") &&
-        attempt < WRITE_RETRY_ATTEMPTS;
-
-      if (!canRetry) {
-        throw error;
-      }
-
-      await delay(WRITE_RETRY_DELAY_MS);
-    }
-  }
-
-  throw new Error("Bradbury write retry loop exhausted unexpectedly.");
+  return client.writeContract(request);
 }
 
 function extractErrorText(error: unknown): string {

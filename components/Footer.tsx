@@ -1,4 +1,8 @@
-import { fetchStatsSnapshot, isContractConfigured } from "@/lib/genlayer";
+import {
+  fetchStatsSnapshot,
+  getContractAddress,
+  isContractConfigured,
+} from "@/lib/genlayer";
 import { unstable_noStore as noStore } from "next/cache";
 
 /**
@@ -15,7 +19,6 @@ import { unstable_noStore as noStore } from "next/cache";
  * instead, which the contract does record.
  */
 
-const CONTRACT = process.env.NEXT_PUBLIC_LEMMA_CONTRACT ?? "";
 const REPO = process.env.NEXT_PUBLIC_REPO_URL ?? "https://github.com/Zhekinmaksim/lemma";
 
 interface FooterStats {
@@ -51,6 +54,7 @@ async function loadStats(): Promise<FooterStats> {
 export async function Footer() {
   noStore();
   const stats = await loadStats();
+  const contractAddress = isContractConfigured() ? getContractAddress() : "";
   const verifiedRate =
     stats.finalizedTotal &&
     stats.finalizedVerified !== null &&
@@ -82,7 +86,7 @@ export async function Footer() {
               margin: 0,
             }}
           >
-            {CONTRACT || "not yet deployed"}
+            {contractAddress || "not yet deployed"}
           </p>
           <p className="meta" style={{ marginTop: "0.4rem" }}>
             Bradbury Testnet

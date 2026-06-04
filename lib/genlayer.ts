@@ -18,6 +18,7 @@
 import { createClient, createAccount } from "genlayer-js";
 import { testnetBradbury, studionet, localnet } from "genlayer-js/chains";
 import { TransactionHashVariant, TransactionStatus } from "genlayer-js/types";
+import { getAddress } from "viem";
 import type { Hash } from "viem";
 import type {
   Verdict,
@@ -95,17 +96,31 @@ export class WalletNotConnectedError extends Error {
 
 type Address0x = `0x${string}`;
 
+function normaliseConfiguredAddress(raw: string | undefined): Address0x | null {
+  const trimmed = raw?.trim();
+  if (!trimmed || !/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+    return null;
+  }
+
+  try {
+    // Accept env values even if they were pasted with the wrong checksum
+    // casing; viem returns the canonical checksummed representation.
+    return getAddress(trimmed.toLowerCase()) as Address0x;
+  } catch {
+    return null;
+  }
+}
+
 export function getContractAddress(): Address0x {
-  const raw = process.env.NEXT_PUBLIC_LEMMA_CONTRACT;
-  if (!raw || !raw.startsWith("0x")) {
+  const address = normaliseConfiguredAddress(process.env.NEXT_PUBLIC_LEMMA_CONTRACT);
+  if (!address) {
     throw new ContractNotDeployedError();
   }
-  return raw as Address0x;
+  return address;
 }
 
 export function isContractConfigured(): boolean {
-  const raw = process.env.NEXT_PUBLIC_LEMMA_CONTRACT;
-  return Boolean(raw && raw.startsWith("0x"));
+  return normaliseConfiguredAddress(process.env.NEXT_PUBLIC_LEMMA_CONTRACT) !== null;
 }
 
 // ---------------------------------------------------------------------------

@@ -38,7 +38,15 @@ function resolveChain() {
   return testnetBradbury;
 }
 
+function resolveNetworkName(): "localnet" | "studionet" | "testnetBradbury" {
+  const target = (process.env.NEXT_PUBLIC_GENLAYER_CHAIN ?? "bradbury").toLowerCase();
+  if (target === "studio" || target === "studionet") return "studionet";
+  if (target === "local" || target === "localnet") return "localnet";
+  return "testnetBradbury";
+}
+
 const chain = resolveChain();
+const networkName = resolveNetworkName();
 
 interface ReadOptions {
   transactionHashVariant?: TransactionHashVariant;
@@ -258,11 +266,17 @@ export async function fetchStatsSnapshot(): Promise<{
 
 function writeClient(account: Address0x) {
   if (!account) throw new WalletNotConnectedError();
+  const provider =
+    typeof window !== "undefined"
+      ? ((window as typeof window & { ethereum?: unknown }).ethereum as never)
+      : undefined;
+
   return createClient({
     chain,
     // MetaMask-driven signing: passing the address tells the SDK to
     // delegate eth_sendTransaction to window.ethereum.
     account,
+    provider,
   });
 }
 
@@ -323,12 +337,18 @@ export async function submitClaim(
     input.account,
   );
 
-  const txHash = await client.writeContract({
-    address,
-    functionName: LEMMA_METHODS.submitClaim,
-    args: [input.claimText, input.sourceUrl, input.sourceContext],
-    value: input.stake,
-  });
+  let txHash: Hash;
+  try {
+    await ensureWalletOnConfiguredNetwork(client);
+    txHash = await client.writeContract({
+      address,
+      functionName: LEMMA_METHODS.submitClaim,
+      args: [input.claimText, input.sourceUrl, input.sourceContext],
+      value: input.stake,
+    });
+  } catch (error) {
+    throw normaliseWriteError(error);
+  }
 
   options.onStatusChange?.({
     txHash,
@@ -404,12 +424,18 @@ export async function appealVerdict(
 ): Promise<AppealVerdictResult> {
   const client = writeClient(input.account);
   const address = getContractAddress();
-  const txHash = await client.writeContract({
-    address,
-    functionName: LEMMA_METHODS.appeal,
-    args: [input.claimHash],
-    value: input.stake,
-  });
+  let txHash: Hash;
+  try {
+    await ensureWalletOnConfiguredNetwork(client);
+    txHash = await client.writeContract({
+      address,
+      functionName: LEMMA_METHODS.appeal,
+      args: [input.claimHash],
+      value: input.stake,
+    });
+  } catch (error) {
+    throw normaliseWriteError(error);
+  }
 
   options.onStatusChange?.({
     txHash,
@@ -613,6 +639,47 @@ function normaliseTransactionStatus(
 
 function humanizeTransactionStatus(status: TransactionStatus | "UNKNOWN"): string {
   return status === "UNKNOWN" ? "unknown state" : status.toLowerCase().replace(/_/g, " ");
+}
+
+async function ensureWalletOnConfiguredNetwork(
+  client: ReturnType<typeof createClient>,
+): Promise<void> {
+  await (client as { connect: (network: string) => Promise<void> }).connect(networkName);
+}
+
+function normaliseWriteError(error: unknown): Error {
+  if (error instanceof ContractNotDeployedError || error instanceof WalletNotConnectedError) {
+    return error;
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Unknown transaction error.";
+  const lower = message.toLowerCase();
+
+  if (lower.includes("wallet is on chain") && lower.includes("configured for chain")) {
+    return new Error(
+      "Your wallet is on the wrong network. Switch it to GenLayer Bradbury Testnet and try again.",
+    );
+  }
+
+  if (
+    lower.includes("rejected") ||
+    lower.includes("denied") ||
+    lower.includes("user refused") ||
+    lower.includes("user cancelled")
+  ) {
+    return new Error("The wallet request was canceled before the transaction was sent.");
+  }
+
+  if (lower.includes("unknown rpc error")) {
+    return new Error(`The wallet or RPC rejected the transaction. Details: ${message}`);
+  }
+
+  return error instanceof Error ? error : new Error(message);
 }
 
 async function computeClaimHash(

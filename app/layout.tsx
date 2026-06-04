@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Topbar } from "@/components/Topbar";
 import { Footer } from "@/components/Footer";
+import { RouteFrame } from "@/components/RouteFrame";
 
 export const metadata: Metadata = {
   title: "Lemma · An on-chain citation court",
@@ -29,7 +30,9 @@ export default function RootLayout({
       <body>
         <div className="shell">
           <Topbar />
-          <main className="page-main">{children}</main>
+          <main className="page-main">
+            <RouteFrame>{children}</RouteFrame>
+          </main>
           <Footer />
         </div>
       </body>

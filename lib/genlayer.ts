@@ -80,6 +80,9 @@ const TERMINAL_FAILURE_STATUSES = new Set<TransactionStatus>([
   TransactionStatus.LEADER_TIMEOUT,
 ]);
 
+const WRITE_RETRY_ATTEMPTS = 3;
+const WRITE_RETRY_DELAY_MS = 1500;
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -292,6 +295,11 @@ export interface SubmitClaimResult {
   verdict: Verdict;
 }
 
+export interface SubmitClaimTransactionResult {
+  txHash: Hash;
+  claimHash: string;
+}
+
 export interface TransactionLifecycleUpdate {
   txHash: Hash;
   lifecycle: "submitted" | "accepted" | "finalized";
@@ -309,6 +317,9 @@ export interface WatchConsensusTransactionSnapshot<T = unknown> {
   value: T | null;
 }
 
+export type ConsensusTransactionStatusSnapshot =
+  Omit<WatchConsensusTransactionSnapshot<never>, "value">;
+
 interface WatchConsensusTransactionOptions<T> {
   account?: Address0x;
   intervalMs?: number;
@@ -322,10 +333,9 @@ interface SubmitClaimOptions {
   onStatusChange?: (update: TransactionLifecycleUpdate) => void;
 }
 
-export async function submitClaim(
+export async function submitClaimTransaction(
   input: SubmitClaimInput,
-  options: SubmitClaimOptions = {},
-): Promise<SubmitClaimResult> {
+): Promise<SubmitClaimTransactionResult> {
   const client = writeClient(input.account);
   const address = getContractAddress();
   const expectedClaimHash = await computeClaimHash(
@@ -337,7 +347,7 @@ export async function submitClaim(
   let txHash: Hash;
   try {
     await ensureWalletOnConfiguredNetwork(client);
-    txHash = await client.writeContract({
+    txHash = await writeContractWithRetry(client, {
       address,
       functionName: LEMMA_METHODS.submitClaim,
       args: [input.claimText, input.sourceUrl, input.sourceContext],
@@ -346,6 +356,18 @@ export async function submitClaim(
   } catch (error) {
     throw normaliseWriteError(error);
   }
+
+  return {
+    txHash,
+    claimHash: expectedClaimHash,
+  };
+}
+
+export async function submitClaim(
+  input: SubmitClaimInput,
+  options: SubmitClaimOptions = {},
+): Promise<SubmitClaimResult> {
+  const { txHash, claimHash: expectedClaimHash } = await submitClaimTransaction(input);
 
   options.onStatusChange?.({
     txHash,
@@ -368,14 +390,16 @@ export async function submitClaim(
     },
     isDone: (state) => state.accepted && state.value !== null,
     onUpdate: (state) => {
-      if (state.accepted) {
-        options.onStatusChange?.({
-          txHash,
-          lifecycle: state.finalized ? "finalized" : "accepted",
-          consensusStatus: state.status,
-          statusCode: state.statusCode,
-        });
-      }
+      options.onStatusChange?.({
+        txHash,
+        lifecycle: state.finalized
+          ? "finalized"
+          : state.accepted
+            ? "accepted"
+            : "submitted",
+        consensusStatus: state.status,
+        statusCode: state.statusCode,
+      });
     },
   });
 
@@ -424,7 +448,7 @@ export async function appealVerdict(
   let txHash: Hash;
   try {
     await ensureWalletOnConfiguredNetwork(client);
-    txHash = await client.writeContract({
+    txHash = await writeContractWithRetry(client, {
       address,
       functionName: LEMMA_METHODS.appeal,
       args: [input.claimHash],
@@ -458,14 +482,16 @@ export async function appealVerdict(
       state.value !== null &&
       state.value.appeal_count > input.previousAppealCount,
     onUpdate: (state) => {
-      if (state.accepted) {
-        options.onStatusChange?.({
-          txHash,
-          lifecycle: state.finalized ? "finalized" : "accepted",
-          consensusStatus: state.status,
-          statusCode: state.statusCode,
-        });
-      }
+      options.onStatusChange?.({
+        txHash,
+        lifecycle: state.finalized
+          ? "finalized"
+          : state.accepted
+            ? "accepted"
+            : "submitted",
+        consensusStatus: state.status,
+        statusCode: state.statusCode,
+      });
     },
   });
 
@@ -593,7 +619,7 @@ export async function watchConsensusTransaction<T = unknown>(
 async function getConsensusTransactionStatus(
   client: ReturnType<typeof createClient>,
   txHash: Hash,
-): Promise<Omit<WatchConsensusTransactionSnapshot<never>, "value">> {
+): Promise<ConsensusTransactionStatusSnapshot> {
   const raw = (await (client as { request: (args: unknown) => Promise<unknown> }).request({
     method: "gen_getTransactionStatus",
     params: [{ txId: txHash }],
@@ -613,6 +639,12 @@ async function getConsensusTransactionStatus(
     finalized: status === TransactionStatus.FINALIZED,
     readyToFinalize: status === TransactionStatus.READY_TO_FINALIZE,
   };
+}
+
+export async function fetchConsensusTransactionStatus(
+  txHash: Hash,
+): Promise<ConsensusTransactionStatusSnapshot> {
+  return getConsensusTransactionStatus(readClient(), txHash);
 }
 
 function normaliseTransactionStatus(
@@ -751,7 +783,41 @@ function normaliseWriteError(error: unknown): Error {
     return new Error(`The wallet or RPC rejected the transaction. Details: ${message}`);
   }
 
+  if (
+    lower.includes("transaction reverted: evm tx") &&
+    lower.includes("consensus contract")
+  ) {
+    return new Error(
+      "Bradbury rejected this write before it entered GenLayer consensus. This is usually a transient network-side revert; submit the claim again.",
+    );
+  }
+
   return new Error(message);
+}
+
+async function writeContractWithRetry(
+  client: ReturnType<typeof createClient>,
+  request: Parameters<ReturnType<typeof createClient>["writeContract"]>[0],
+): Promise<Hash> {
+  for (let attempt = 1; attempt <= WRITE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await client.writeContract(request);
+    } catch (error) {
+      const message = extractErrorText(error).toLowerCase();
+      const canRetry =
+        message.includes("transaction reverted: evm tx") &&
+        message.includes("consensus contract") &&
+        attempt < WRITE_RETRY_ATTEMPTS;
+
+      if (!canRetry) {
+        throw error;
+      }
+
+      await delay(WRITE_RETRY_DELAY_MS);
+    }
+  }
+
+  throw new Error("Bradbury write retry loop exhausted unexpectedly.");
 }
 
 function extractErrorText(error: unknown): string {

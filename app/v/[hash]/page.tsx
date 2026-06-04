@@ -5,6 +5,7 @@ import { fetchVerdictRecord, isContractConfigured } from "@/lib/genlayer";
 import { VerdictBadge } from "@/components/VerdictBadge";
 import { CiteModal } from "@/components/CiteModal";
 import { AppealButton } from "@/components/AppealButton";
+import { PendingVerdictStatus } from "@/components/PendingVerdictStatus";
 import {
   formatSequence,
   truncateAddress,
@@ -17,12 +18,13 @@ import {
 
 interface PageProps {
   params: { hash: string };
+  searchParams?: { tx?: string | string[] };
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   if (!isContractConfigured()) return { title: "Verdict · Lemma" };
   const verdict = await fetchVerdictRecord(params.hash);
-  if (!verdict) return { title: "Verdict not found · Lemma" };
+  if (!verdict) return { title: "Pending verdict · Lemma" };
   const seq = formatSequence(verdict.sequence);
   const settlement = verdict.settlement_status ?? "accepted";
   return {
@@ -43,7 +45,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function VerdictPage({ params }: PageProps) {
+export default async function VerdictPage({ params, searchParams }: PageProps) {
   if (!isContractConfigured()) {
     return (
       <div className="max-w-prose">
@@ -59,12 +61,16 @@ export default async function VerdictPage({ params }: PageProps) {
 
   return (
     <Suspense fallback={<VerdictSkeleton />}>
-      <VerdictBody hash={params.hash} />
+      <VerdictBody hash={params.hash} txHash={coerceTxHash(searchParams?.tx)} />
     </Suspense>
   );
 }
 
-async function VerdictBody({ hash }: { hash: string }) {
+async function VerdictBody({ hash, txHash }: { hash: string; txHash: `0x${string}` | null }) {
+  if (txHash) {
+    return <PendingVerdictStatus claimHash={hash} txHash={txHash} />;
+  }
+
   const verdict = await fetchVerdictRecord(hash);
   if (!verdict) notFound();
 
@@ -206,4 +212,10 @@ function VerdictSkeleton() {
       </p>
     </div>
   );
+}
+
+function coerceTxHash(value: string | string[] | undefined): `0x${string}` | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw || !/^0x[0-9a-fA-F]+$/.test(raw)) return null;
+  return raw as `0x${string}`;
 }

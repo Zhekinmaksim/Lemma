@@ -3,23 +3,23 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/lib/wallet";
-import type { VerdictSettlementStatus } from "@/lib/abi";
 import { validateClaimInputs } from "@/lib/abi";
-import { submitClaim, ContractNotDeployedError, isContractConfigured } from "@/lib/genlayer";
-import { truncateHash } from "@/lib/format";
+import {
+  submitClaimTransaction,
+  ContractNotDeployedError,
+  isContractConfigured,
+} from "@/lib/genlayer";
 
 /**
- * The full submission flow.
+ * Submission form.
  *
- * The state machine follows the spec:
- *   IDLE → FORM_FILLING → SIGNING_TX → TX_PENDING → JURY_DELIBERATING → DONE
- *
- * Each state has a typographic representation, not a UI gimmick. The
- * only motion in the entire flow is the caret-blink on the loading
- * states. No spinner, no progress bar, no toast.
+ * This component only carries the user through wallet signature and tx
+ * submission. Once Bradbury returns a tx hash, the UI moves to the
+ * verdict route and lets that page own the long-running consensus
+ * lifecycle.
  */
 
-type Phase = "idle" | "signing" | "pending" | "deliberating" | "done" | "error";
+type Phase = "idle" | "signing" | "error";
 
 const MIN_STAKE_BASE = 1_000_000_000_000_000n; // 0.001 GEN in base units
 
@@ -33,10 +33,6 @@ export function ClaimForm() {
   const [stakeMultiplier, setStakeMultiplier] = useState(1); // multiples of MIN_STAKE
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
-  const [claimHash, setClaimHash] = useState<string | null>(null);
-  const [settlementStatus, setSettlementStatus] =
-    useState<VerdictSettlementStatus>("accepted");
 
   const charCount = claimText.length;
   const inlineError = useMemo(
@@ -61,31 +57,16 @@ export function ClaimForm() {
 
     try {
       setPhase("signing");
-      const result = await submitClaim({
+      const result = await submitClaimTransaction({
         account: address,
         claimText: claimText.trim(),
         sourceUrl: sourceUrl.trim(),
         sourceContext: sourceContext.trim(),
         stake,
-      }, {
-        onStatusChange: (update) => {
-          setTxHash(update.txHash);
-          if (update.lifecycle === "submitted") {
-            setPhase("pending");
-            return;
-          }
-          if (update.lifecycle === "accepted") {
-            setPhase("deliberating");
-            return;
-          }
-          setSettlementStatus("finalized");
-        },
       });
-      setTxHash(result.txHash);
-      setClaimHash(result.claimHash);
-      setSettlementStatus(result.settlementStatus);
-      setPhase("done");
-      setTimeout(() => router.push(`/v/${result.claimHash}`), 600);
+      router.push(`/v/${result.claimHash}?tx=${result.txHash}`, {
+        scroll: true,
+      });
     } catch (err: unknown) {
       if (err instanceof ContractNotDeployedError) {
         setErrorMessage(
@@ -103,9 +84,6 @@ export function ClaimForm() {
   function reset() {
     setPhase("idle");
     setErrorMessage(null);
-    setTxHash(null);
-    setClaimHash(null);
-    setSettlementStatus("accepted");
   }
 
   // -------------------------------------------------------------------------
@@ -117,49 +95,6 @@ export function ClaimForm() {
       <StateBlock
         label="Awaiting signature"
         body="Confirm the transaction in your wallet. The conviction stake is held by the contract while the jury deliberates."
-      />
-    );
-  }
-
-  if (phase === "pending") {
-    return (
-      <StateBlock
-        label="Transaction submitted"
-        body="The claim has been submitted to Bradbury. A leader is being selected and the jury is about to deliberate."
-        meta={txHash ? `tx: ${truncateHash(txHash, 10, 8)}` : undefined}
-      />
-    );
-  }
-
-  if (phase === "deliberating") {
-    return (
-      <StateBlock
-        label="Accepted; locating record"
-        body="Bradbury accepted the claim, but the UI has not yet resolved the claim hash from the receipt. The accepted record should surface in the feed shortly; finalization may take longer."
-        meta={txHash ? `tx: ${truncateHash(txHash, 10, 8)}` : undefined}
-        action={
-          <button type="button" className="btn" onClick={reset}>
-            Submit another claim
-          </button>
-        }
-      />
-    );
-  }
-
-  if (phase === "done" && claimHash) {
-    const body =
-      settlementStatus === "finalized"
-        ? "The verdict record is finalized on Bradbury and the page is opening now."
-        : "The verdict record is live on Bradbury and the page is opening now. Finalization may follow after the appeal window closes.";
-    return (
-      <StateBlock
-        label={
-          settlementStatus === "finalized"
-            ? "Finalized by the jury"
-            : "Accepted by the jury"
-        }
-        body={body}
-        meta={`hash: ${truncateHash(claimHash, 10, 8)}`}
       />
     );
   }
@@ -285,8 +220,8 @@ export function ClaimForm() {
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <p className="font-serif text-small text-ink-soft sm:max-w-prose">
           When you submit, a jury of validators will independently fetch your
-          source, read it, and issue a verdict. This typically takes thirty
-          to sixty seconds.
+          source, read it, and issue a verdict. The next page tracks the live
+          Bradbury stages until the readable record appears.
         </p>
 
         <div className="flex flex-col items-start gap-2 sm:items-end">
@@ -335,12 +270,10 @@ export function ClaimForm() {
 interface StateBlockProps {
   label: string;
   body: string;
-  meta?: string;
   variant?: "default" | "error";
-  action?: React.ReactNode;
 }
 
-function StateBlock({ label, body, meta, variant = "default", action }: StateBlockProps) {
+function StateBlock({ label, body, variant = "default" }: StateBlockProps) {
   return (
     <section className="max-w-prose">
       <p
@@ -349,10 +282,6 @@ function StateBlock({ label, body, meta, variant = "default", action }: StateBlo
         {label} <span className="caret-blink" aria-hidden="true" />
       </p>
       <p className="mt-4 font-serif text-lead leading-relaxed text-ink">{body}</p>
-      {meta && (
-        <p className="mt-6 font-mono text-meta text-ink-muted">{meta}</p>
-      )}
-      {action && <div className="mt-8">{action}</div>}
     </section>
   );
 }

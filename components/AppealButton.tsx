@@ -6,6 +6,7 @@ import type { Verdict } from "@/lib/abi";
 import type { VerdictSettlementStatus } from "@/lib/abi";
 import { useWallet } from "@/lib/wallet";
 import { appealVerdict } from "@/lib/genlayer";
+import type { TransactionLifecycleUpdate } from "@/lib/genlayer";
 import { truncateHash } from "@/lib/format";
 
 /**
@@ -30,6 +31,8 @@ export function AppealButton({ verdict }: AppealButtonProps) {
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [settlementStatus, setSettlementStatus] =
     useState<VerdictSettlementStatus>("accepted");
+  const [consensusStatus, setConsensusStatus] =
+    useState<TransactionLifecycleUpdate["consensusStatus"]>("UNKNOWN");
 
   const alreadyAppealed = verdict.appeal_count >= 1;
   const appealStake = BigInt(verdict.stake_consumed) * 5n;
@@ -60,6 +63,7 @@ export function AppealButton({ verdict }: AppealButtonProps) {
       }, {
         onStatusChange: (update) => {
           setTxHash(update.txHash);
+          setConsensusStatus(update.consensusStatus);
           if (update.lifecycle === "submitted") {
             setPhase("pending");
             return;
@@ -126,12 +130,11 @@ export function AppealButton({ verdict }: AppealButtonProps) {
   }
 
   if (phase === "pending") {
+    const copy = describeAppealConsensusStatus(consensusStatus);
     return (
       <div className="space-y-2">
         <p className="font-serif text-body text-ink-soft">
-          <span className="caret-blink">
-            Appeal submitted; Bradbury is processing the new jury round
-          </span>
+          <span className="caret-blink">{copy}</span>
         </p>
         {txHash && (
           <p className="font-mono text-meta text-ink-muted">
@@ -163,4 +166,27 @@ export function AppealButton({ verdict }: AppealButtonProps) {
       </button>
     </div>
   );
+}
+
+function describeAppealConsensusStatus(
+  status: TransactionLifecycleUpdate["consensusStatus"],
+): string {
+  switch (status) {
+    case "PENDING":
+      return "Appeal submitted; Bradbury queued the transaction";
+    case "PROPOSING":
+      return "Appeal submitted; a leader is proposing the new jury round";
+    case "COMMITTING":
+      return "Appeal submitted; validators are committing votes";
+    case "REVEALING":
+      return "Appeal submitted; validators are revealing votes";
+    case "ACCEPTED":
+      return "Appeal accepted; locating the updated verdict record";
+    case "READY_TO_FINALIZE":
+      return "Appeal accepted; finalization window is open";
+    case "FINALIZED":
+      return "Appeal finalized; refreshing the permanent record";
+    default:
+      return "Appeal submitted; Bradbury is processing the new jury round";
+  }
 }

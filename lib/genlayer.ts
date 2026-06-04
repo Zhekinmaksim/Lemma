@@ -266,10 +266,7 @@ export async function fetchStatsSnapshot(): Promise<{
 
 function writeClient(account: Address0x) {
   if (!account) throw new WalletNotConnectedError();
-  const provider =
-    typeof window !== "undefined"
-      ? ((window as typeof window & { ethereum?: unknown }).ethereum as never)
-      : undefined;
+  const provider = getEthereumProvider();
 
   return createClient({
     chain,
@@ -644,7 +641,48 @@ function humanizeTransactionStatus(status: TransactionStatus | "UNKNOWN"): strin
 async function ensureWalletOnConfiguredNetwork(
   client: ReturnType<typeof createClient>,
 ): Promise<void> {
-  await (client as { connect: (network: string) => Promise<void> }).connect(networkName);
+  const provider = getEthereumProvider();
+  if (!provider) {
+    throw new Error("No Ethereum-compatible wallet detected.");
+  }
+
+  const targetChainIdHex = `0x${chain.id.toString(16)}`;
+  const currentChainId = await provider.request({ method: "eth_chainId" });
+
+  if (currentChainId !== targetChainIdHex) {
+    try {
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: targetChainIdHex }],
+      });
+    } catch (error) {
+      if (isChainNotAddedError(error)) {
+        await provider.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: targetChainIdHex,
+              chainName: chain.name,
+              rpcUrls: chain.rpcUrls.default.http,
+              nativeCurrency: chain.nativeCurrency,
+              blockExplorerUrls: chain.blockExplorers?.default?.url
+                ? [chain.blockExplorers.default.url]
+                : undefined,
+            },
+          ],
+        });
+        await provider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: targetChainIdHex }],
+        });
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  await ensureGenLayerSnapInstalled(provider);
+  client.chain = chain;
 }
 
 function normaliseWriteError(error: unknown): Error {
@@ -766,6 +804,59 @@ function extractErrorText(error: unknown): string {
     .trim();
 
   return collapsed || "Unknown transaction error.";
+}
+
+function getEthereumProvider():
+  | { request: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown> }
+  | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as typeof window & {
+    ethereum?: {
+      request: (args: {
+        method: string;
+        params?: unknown[] | Record<string, unknown>;
+      }) => Promise<unknown>;
+    };
+  }).ethereum;
+}
+
+function isChainNotAddedError(error: unknown): boolean {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? Number((error as { code?: unknown }).code)
+      : Number.NaN;
+
+  if (code === 4902) return true;
+
+  const message = extractErrorText(error).toLowerCase();
+  return (
+    message.includes("4902") ||
+    message.includes("unrecognized chain id") ||
+    message.includes("unknown chain") ||
+    message.includes("chain not added")
+  );
+}
+
+async function ensureGenLayerSnapInstalled(
+  provider: NonNullable<ReturnType<typeof getEthereumProvider>>,
+): Promise<void> {
+  const snapId = "npm:genlayer-wallet-plugin";
+  const installedSnaps = (await provider.request({
+    method: "wallet_getSnaps",
+  })) as Record<string, { id?: string }>;
+
+  const isInstalled = Object.values(installedSnaps ?? {}).some(
+    (snap) => snap?.id === snapId,
+  );
+
+  if (isInstalled) return;
+
+  await provider.request({
+    method: "wallet_requestSnaps",
+    params: {
+      [snapId]: {},
+    },
+  });
 }
 
 async function computeClaimHash(

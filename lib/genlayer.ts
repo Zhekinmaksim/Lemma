@@ -652,17 +652,51 @@ function normaliseWriteError(error: unknown): Error {
     return error;
   }
 
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "Unknown transaction error.";
+  const message = extractErrorText(error);
   const lower = message.toLowerCase();
 
   if (lower.includes("wallet is on chain") && lower.includes("configured for chain")) {
     return new Error(
       "Your wallet is on the wrong network. Switch it to GenLayer Bradbury Testnet and try again.",
+    );
+  }
+
+  if (
+    lower.includes("wallet_getsnaps") ||
+    lower.includes("wallet_requestsnaps") ||
+    lower.includes("provider does not support the requested method") ||
+    lower.includes("the provider does not support the requested method")
+  ) {
+    return new Error(
+      "Your current wallet does not support the GenLayer Snap flow. Use MetaMask on desktop and approve the GenLayer Snap installation for Bradbury.",
+    );
+  }
+
+  if (
+    lower.includes("snap") &&
+    (lower.includes("rejected") ||
+      lower.includes("denied") ||
+      lower.includes("refused") ||
+      lower.includes("cancelled") ||
+      lower.includes("canceled"))
+  ) {
+    return new Error(
+      "The GenLayer Snap request was canceled. Open MetaMask again and approve the Snap installation to send Bradbury transactions.",
+    );
+  }
+
+  if (
+    (lower.includes("wallet_switchethereumchain") ||
+      lower.includes("wallet_addethereumchain") ||
+      lower.includes("switch chain")) &&
+    (lower.includes("rejected") ||
+      lower.includes("denied") ||
+      lower.includes("refused") ||
+      lower.includes("cancelled") ||
+      lower.includes("canceled"))
+  ) {
+    return new Error(
+      "The network switch was canceled. Approve the switch to GenLayer Bradbury Testnet and try again.",
     );
   }
 
@@ -679,7 +713,59 @@ function normaliseWriteError(error: unknown): Error {
     return new Error(`The wallet or RPC rejected the transaction. Details: ${message}`);
   }
 
-  return error instanceof Error ? error : new Error(message);
+  return new Error(message);
+}
+
+function extractErrorText(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new WeakSet<object>();
+
+  function visit(value: unknown): void {
+    if (value == null) return;
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed) parts.push(trimmed);
+      return;
+    }
+
+    if (typeof value !== "object") return;
+    if (seen.has(value)) return;
+    seen.add(value);
+
+    const candidate = value as {
+      shortMessage?: unknown;
+      details?: unknown;
+      message?: unknown;
+      reason?: unknown;
+      cause?: unknown;
+      data?: unknown;
+      code?: unknown;
+    };
+
+    visit(candidate.shortMessage);
+    visit(candidate.details);
+    visit(candidate.message);
+    visit(candidate.reason);
+
+    if (candidate.data && typeof candidate.data === "object") {
+      const data = candidate.data as Record<string, unknown>;
+      visit(data.message);
+      visit(data.details);
+      visit(data.reason);
+    }
+
+    visit(candidate.cause);
+  }
+
+  visit(error);
+
+  const collapsed = parts
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return collapsed || "Unknown transaction error.";
 }
 
 async function computeClaimHash(

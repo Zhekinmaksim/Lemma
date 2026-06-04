@@ -320,6 +320,17 @@ export interface WatchConsensusTransactionSnapshot<T = unknown> {
 export type ConsensusTransactionStatusSnapshot =
   Omit<WatchConsensusTransactionSnapshot<never>, "value">;
 
+export interface ConsensusTransactionReceiptSnapshot {
+  txHash: Hash;
+  statusCode: number | null;
+  createdAt: number | null;
+  pendingAt: number | null;
+  activatedAt: number | null;
+  proposedAt: number | null;
+  committedAt: number | null;
+  lastVoteAt: number | null;
+}
+
 interface WatchConsensusTransactionOptions<T> {
   account?: Address0x;
   intervalMs?: number;
@@ -645,6 +656,46 @@ export async function fetchConsensusTransactionStatus(
   txHash: Hash,
 ): Promise<ConsensusTransactionStatusSnapshot> {
   return getConsensusTransactionStatus(readClient(), txHash);
+}
+
+async function getConsensusTransactionReceipt(
+  client: ReturnType<typeof createClient>,
+  txHash: Hash,
+): Promise<ConsensusTransactionReceiptSnapshot> {
+  const raw = (await (client as { request: (args: unknown) => Promise<unknown> }).request({
+    method: "gen_getTransactionReceipt",
+    params: [{ txId: txHash }],
+  })) as {
+    status?: unknown;
+    timestamps?: {
+      Created?: unknown;
+      Pending?: unknown;
+      Activated?: unknown;
+      Proposed?: unknown;
+      Committed?: unknown;
+      LastVote?: unknown;
+    };
+  };
+
+  const timestamps = raw.timestamps ?? {};
+  const statusCode = typeof raw.status === "number" ? raw.status : toNumber(raw.status);
+
+  return {
+    txHash,
+    statusCode: Number.isFinite(statusCode) ? statusCode : null,
+    createdAt: toNumber(timestamps.Created),
+    pendingAt: toNumber(timestamps.Pending),
+    activatedAt: toNumber(timestamps.Activated),
+    proposedAt: toNumber(timestamps.Proposed),
+    committedAt: toNumber(timestamps.Committed),
+    lastVoteAt: toNumber(timestamps.LastVote),
+  };
+}
+
+export async function fetchConsensusTransactionReceipt(
+  txHash: Hash,
+): Promise<ConsensusTransactionReceiptSnapshot> {
+  return getConsensusTransactionReceipt(readClient(), txHash);
 }
 
 function normaliseTransactionStatus(

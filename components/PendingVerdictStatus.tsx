@@ -6,6 +6,7 @@ import type { Hash } from "viem";
 import { TransactionStatus } from "genlayer-js/types";
 import {
   fetchConsensusTransactionStatus,
+  fetchConsensusTransactionReceipt,
   fetchVerdictRecord,
 } from "@/lib/genlayer";
 import type { Verdict } from "@/lib/abi";
@@ -18,6 +19,7 @@ interface PendingVerdictStatusProps {
 
 type ConsensusSnapshot = Awaited<ReturnType<typeof fetchConsensusTransactionStatus>>;
 type ConsensusStage = TransactionStatus | "UNKNOWN";
+const STUCK_PENDING_SECONDS = 90;
 
 export function PendingVerdictStatus({
   claimHash,
@@ -31,14 +33,17 @@ export function PendingVerdictStatus({
   const [rpcMessage, setRpcMessage] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [recordDetected, setRecordDetected] = useState(false);
+  const [pendingAt, setPendingAt] = useState<number | null>(null);
+  const [activatedAt, setActivatedAt] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
-      const [statusResult, verdictResult] = await Promise.allSettled([
+      const [statusResult, receiptResult, verdictResult] = await Promise.allSettled([
         fetchConsensusTransactionStatus(txHash),
+        fetchConsensusTransactionReceipt(txHash),
         fetchVerdictRecord(claimHash),
       ]);
 
@@ -63,6 +68,11 @@ export function PendingVerdictStatus({
         setRpcMessage("Bradbury RPC is slow to answer. The court page is still polling.");
       }
 
+      if (receiptResult.status === "fulfilled") {
+        setPendingAt(receiptResult.value.pendingAt);
+        setActivatedAt(receiptResult.value.activatedAt);
+      }
+
       if (verdictResult.status === "fulfilled") {
         setVerdict(verdictResult.value);
         if (verdictResult.value) {
@@ -83,7 +93,21 @@ export function PendingVerdictStatus({
     };
   }, [claimHash, txHash]);
 
-  const copy = describePendingStatus(status);
+  const pendingForSeconds =
+    pendingAt && pendingAt > 0 ? Math.max(0, Math.floor(Date.now() / 1000) - pendingAt) : null;
+  const isStuckPending =
+    status === TransactionStatus.PENDING &&
+    pendingForSeconds !== null &&
+    pendingForSeconds >= STUCK_PENDING_SECONDS &&
+    (!activatedAt || activatedAt === 0);
+  const copy = describePendingStatus(status, isStuckPending);
+  const showResubmitAction =
+    isStuckPending ||
+    status === TransactionStatus.UNINITIALIZED ||
+    status === TransactionStatus.CANCELED ||
+    status === TransactionStatus.UNDETERMINED ||
+    status === TransactionStatus.VALIDATORS_TIMEOUT ||
+    status === TransactionStatus.LEADER_TIMEOUT;
 
   return (
     <article className="mx-auto max-w-prose space-y-section">
@@ -114,7 +138,7 @@ export function PendingVerdictStatus({
         <Field label="Expected claim hash">
           <span className="font-mono text-body break-all">{claimHash}</span>
         </Field>
-        <Field label="Transaction">
+        <Field label="Consensus transaction id">
           <span className="font-mono text-body break-all">{txHash}</span>
         </Field>
         <Field label="Observed stage">
@@ -135,6 +159,16 @@ export function PendingVerdictStatus({
         <Field label="Current verdict">
           <span className="font-mono text-body lowercase">
             {verdict?.label?.replace(/_/g, " ") ?? "not yet"}
+          </span>
+        </Field>
+        <Field label="Where to look">
+          <span className="font-serif text-small text-ink-soft">
+            This hash is polled through Bradbury RPC. It will not necessarily resolve as a zkSync explorer transaction page.
+          </span>
+        </Field>
+        <Field label="Queue age">
+          <span className="font-mono text-body">
+            {pendingForSeconds === null ? "unknown" : `${pendingForSeconds}s`}
           </span>
         </Field>
       </section>
@@ -158,6 +192,11 @@ export function PendingVerdictStatus({
             its terminal state.
           </p>
         )}
+        {showResubmitAction && (
+          <Link href="/submit" className="btn">
+            Resubmit claim →
+          </Link>
+        )}
         {(status === TransactionStatus.FINALIZED || verdict?.settlement_status === "finalized") && (
           <Link href={`/v/${claimHash}`} className="btn">
             Open permanent record →
@@ -171,15 +210,21 @@ export function PendingVerdictStatus({
   );
 }
 
-function describePendingStatus(status: ConsensusStage): {
+function describePendingStatus(status: ConsensusStage, isStuckPending: boolean): {
   label: string;
   body: string;
 } {
   switch (status) {
     case "PENDING":
+      if (isStuckPending) {
+        return {
+          label: "Still queued on Bradbury",
+          body: "Bradbury has kept this claim in the pending queue without activating validator consensus. If your zkSync explorer submission shows failed or reverted, treat this attempt as unsuccessful and resubmit the claim.",
+        };
+      }
       return {
-        label: "Transaction submitted",
-        body: "Bradbury has accepted the transaction into its queue. The claim is waiting to enter validator consensus.",
+        label: "Queued on Bradbury",
+        body: "Bradbury has accepted the claim into its queue. The network has not activated validator consensus yet.",
       };
     case "PROPOSING":
       return {
